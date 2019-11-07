@@ -1,9 +1,73 @@
 ---
-title: "Scratch"
+title: "Scratchwork"
 output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#READING IN DATA
+library(lubridate)
+library(sf)
+library(dplyr)
+gdb <- "/Users/salmahuque/Desktop/BigThesis/Reed/data.gdb"
+layers <- st_layers(gdb)
+layers
+
+
+school_zones <- st_read(gdb, layer = "school_attendance_areas")
+bli_devo_cap <- st_read(gdb, layer = "bli_development_capacity")
+cop_sales_history <- st_read(gdb, layer = "CoP_OrionSalesHistory")
+cop_improve_segment <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
+cop_gis_property <- st_read(gdb, layer = "CoP_GISProperty")
+cop_gis_improvement <- st_read(gdb, layer = "CoP_GISImprovement")
+cop_all_props <- st_read(gdb, layer = "CoP_AllProperties")
+roll_values <- st_read(gdb, layer = "roll_values")
+roll_history_wide <- st_read(gdb, layer = "roll_history_wide")
+roll_history <- st_read(gdb, layer = "roll_history")
+imp_segments <- st_read(gdb, layer = "imp_segments")
+seg_char <- st_read(gdb, layer = "Seg_Char")
+plumbing_lu <- st_read(gdb, layer = "Plumbing_Lookup")
+fireplace_lu <- st_read(gdb, layer = "Fireplace_Lookup")
+imp_type_lu <  st_read(gdb, layer = "Imp_Type_Lookup")
+imp_codes_lu <- st_read(gdb, layer = "Improvement_Codes_Lookup")
+seg_type_lu <- st_read(gdb, layer = "Segment_Type_Lookup")
+prop_code_lu <- st_read(gdb, layer = "Property_Code_Lookup")
+improvements <- st_read(gdb, layer = "improvements")
+```
+
+```{r}
+#SCHOOL ZONES CLEANING
+
+school_zones_hs <- school_zones[c('76','77','88','89', '96':'105'), 'HIGH_SCH']
+colnames(school_zones_hs) <- paste(colnames(school_zones_hs), "HS", sep = " ")
+
+```
+
+
+```{r}
+imp_inquiry <- anti_join(imp_codes_lu, imp_type_lu, by = c("Code" = "CODE"))
+
+#For imp_codes_lu, the CND's are underscored, for imp_type_lu they're slashed. imp_codes_lu has an extra variable CND-V and CND_V which staand for the same thing
+
+sfr_inquiry <- bli_devo_cap[which(bli_devo_cap$GEN_ZONE == "Single-Family Residential"),]
+```
+
+```{r}
+#Merging
+
+roll_values_roll_history <- full_join(roll_values, roll_history)
+
+test_for_duplicates <- function(dataset, id_name) {
+   as.table(dataset$id_name)
+
+if (test_expression) {
+statement
+}
+}
+
+table_imp_segments <- table(imp_segments$PropertyID)
 ```
 
