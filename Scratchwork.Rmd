@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(lubridate)
 library(sf)
 library(dplyr)
+library(reshape)
 gdb <- "/Users/salmahuque/Desktop/BigThesis/Reed/data.gdb"
 layers <- st_layers(gdb)
 layers
@@ -39,35 +40,72 @@ improvements <- st_read(gdb, layer = "improvements")
 ```
 
 ```{r}
-#SCHOOL ZONES CLEANING
 
-school_zones_hs <- school_zones[c('76','77','88','89', '96':'105'), 'HIGH_SCH']
-colnames(school_zones_hs) <- paste(colnames(school_zones_hs), "HS", sep = " ")
+bigid <- c("R122577", "R290070")
+littleid <- c("79992", "241919")
+stid <- "1S2E17CD  19900"
+rno <- c("R110500190", "R842406870")
+  filter(bli_devo_cap, RNO == rno)
+  filter(cop_all_props, PropertyID == littleid)
+  filter(cop_gis_improvement, PropID == bigid)
+  filter(cop_gis_property, PropID == bigid)
+  filter(cop_improve_segment, PropID == bigid)
+  filter(cop_sales_history, PropID == bigid)
+  filter(imp_segments, PropertyID == bigid)
+  filter(improvements, PropertyID == bigid)
+  filter(roll_history, PropertyID == bigid)
+  filter(roll_history_wide, PropertyID == bigid)
+  filter(roll_values, PropertyID == bigid)
+  filter(seg_char, PropertyID == bigid)
 
-```
+test <- bind_cols(
+  bli_obs <- filter(bli_devo_cap, RNO %in% rno),
+  allprop_obs <- filter(cop_all_props, PropertyID %in% littleid),
+  gisimp_obs <- filter(cop_gis_improvement, PropID %in% bigid),
+  gisprop_obs <- filter(cop_gis_property, PropID %in% bigid),
+  copimpseg_obs <- filter(cop_improve_segment, PropID %in% bigid),
+  saleshist_obs <- filter(cop_sales_history, PropID %in% bigid),
+  impseg_obs <- filter(imp_segments, PropertyID %in% bigid),
+  imps_obs <- filter(improvements, PropertyID %in% bigid),
+  rollhist_obs <- filter(roll_history, PropertyID %in% bigid),
+  rollhistwide_obs <- filter(roll_history_wide, PropertyID %in% bigid),
+  rollvals_obs <- filter(roll_values, PropertyID %in% bigid),
+  segchar_obs <- filter(seg_char, PropertyID %in% bigid)
+  )
 
+test <- bind_cols(
+  allprop_obs <- filter(cop_all_props, PropertyID %in% littleid),
+  gisimp_obs <- filter(cop_gis_improvement, PropID %in% bigid),
+  gisprop_obs <- filter(cop_gis_property, PropID %in% bigid),
+  imps_obs <- filter(improvements, PropertyID %in% bigid),
+  rollhistwide_obs <- filter(roll_history_wide, PropertyID %in% bigid)
+  )
 
-```{r}
-imp_inquiry <- anti_join(imp_codes_lu, imp_type_lu, by = c("Code" = "CODE"))
+leftover: 
+  bli_obs == 0 #because contraints not available
+  impseg_obs == 9
+  copimpseg_obs == 9
+  saleshist_obs == 7
+  rollhist_obs == 44
+  rollvals_obs == 44
+  segchar_obs == 0
+  
+  
+selectanobs <- function(letter_id, number_id, state_id, rno) {
+  (filter(bli_devo_cap, RNO == rno)
+  filter(cop_all_props, PropertyID == number_id)
+  filter(cop_gis_improvement, PropID == letter_id)
+  filter(cop_gis_improvement, PropID == letter_id)
+  filter(cop_improve_segment, PropID == letter_id)
+  filter(cop_sales_history, PropID == letter_id)
+  filter(imp_segments, PropertyID == letter_id)
+  filter(improvements, PropertyID == letter_id)
+  filter(roll_history, PropertyID == letter_id)
+  filter(roll_history_wide, PropertyID == letter_id)
+  filter(roll_values, PropertyID == letter_id)
+  filter(seg_char, PropertyID == letter_id)
 
-#For imp_codes_lu, the CND's are underscored, for imp_type_lu they're slashed. imp_codes_lu has an extra variable CND-V and CND_V which staand for the same thing
-
-sfr_inquiry <- bli_devo_cap[which(bli_devo_cap$GEN_ZONE == "Single-Family Residential"),]
-```
-
-```{r}
-#Merging
-
-roll_values_roll_history <- full_join(roll_values, roll_history)
-
-test_for_duplicates <- function(dataset, id_name) {
-   as.table(dataset$id_name)
-
-if (test_expression) {
-statement
+  
 }
-}
-
-table_imp_segments <- table(imp_segments$PropertyID)
 ```
 
