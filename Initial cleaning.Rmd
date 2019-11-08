@@ -1,0 +1,234 @@
+---
+title: "initial data scratch"
+output: pdf_document
+---
+
+```{r}
+datanames <- c("gisimpcop", "impsegcop", "gispropcop", "allpropcop", "segchar", "rollhist", "impseg", "salescop","school", "imp", "constraints")
+datanames
+```
+
+### Column Names/Keys to join:
+```{r}
+for(i in datanames){
+  colnames(get(i))
+}
+
+# create function to get all of our variable names
+composed <- function(name){
+  colnames(get(name))
+}
+
+allvars <- lapply(datanames, composed)
+names(allvars) <- datanames
+
+id_list <- list(c(), length(datanames))
+for(i in 1:length(allvars)){
+  id_list[i] <- allvars[[i]][grepl("ID", allvars[[i]])]
+}
+names(id_list) <- datanames
+
+allvars
+
+# has prefix
+segchar$PropertyID
+rollhist$PropertyID
+salescop$PropertyID
+gisimpcop$PropID
+impsegcop$PropID
+gispropcop$PropID
+impseg$PropertyID
+
+# this does not have letter prefix
+allpropcop$PropertyID
+```
+
+### Finding Carlton house...
+```{r}
+id <- "R122577"
+gisimpcop %>% filter(PropID == id)
+salescop %>% filter(PropID == id)
+rollhist %>% filter(PropertyID == id)
+gispropcop %>% filter(PropID == id)
+segchar %>% filter(PropertyID == id) #turned nothing
+impseg %>% filter(PropertyID == "R328259" | PropertyID == id) %>% group_by(PropertyID)
+impsegcop %>% filter(PropID == id)
+
+```
+
+
+### Finding Wimbledons...
+```{r}
+id <- "R228329"
+gisimpcop %>% filter(PropID == id) # shows 0 units, which is a problem
+salescop %>% filter(PropID == id) 
+rollhist %>% filter(PropertyID == id)
+gispropcop %>% filter(PropID == id) # hmm property type is commercial?
+segchar %>% filter(PropertyID == id) #turned nothing
+impseg %>% filter(PropertyID == id) %>% group_by(PropertyID)
+impsegcop %>% filter(PropID == id)
+
+```
+
+### Property Type: Residential, Mixed-use, Multifamily
+
+```{r}
+levels(gispropcop$PropertyType)
+levels(constraints$GEN_USE)
+levels(constraints$GEN_ZONE)
+levels(constraints$REG_ZONE)
+levels(constraints$NEWDESIG)
+levels(imp$Imp_Type)
+
+
+
+```
+
+### Messy joins:
+
+```{r}
+salescop$SaleDate <- as.Date(salescop$SaleDate)
+summary(salescop$SaleDate)
+n <- salescop %>% filter(SaleDate < as.Date("2019-12-01"))
+# all dates are exactly the same at "9999-12-31" find out what this means
+weirddates <- salescop %>% filter(SaleDate > as.Date("2019-12-01"))
+
+# check out the date ranges
+summary(weirddates$SaleDate)
+summary(n$SaleDate)
+
+nrow(weirddates) 
+nrow(n)
+
+# Number of observations in each 5-year interval
+for(year in 2010:2019){
+  end <- paste0(year,"-12-01")
+  begin <- paste0(year - 4,"-12-01")
+  trim <- salescop %>% filter(SaleDate < as.Date(end) & SaleDate > as.Date(begin))
+  invl <- paste(year - 4, year, sep = "-")
+  print(paste(invl, nrow(trim), sep = ": "))
+}
+
+```
+
+
+Choose 2014-2018 and merge across all data sets.
+```{r}
+year <- 2018
+end <- paste0(year,"-12-01")
+begin <- paste0(year - 4,"-12-01")
+trim <- salescop %>% filter(SaleDate < as.Date(end) & SaleDate > as.Date(begin))
+
+# Join:
+merge1 <- left_join(trim, gisimpcop, by = "PropID")
+
+head(merge1)
+dim(merge1)
+dim(trim) # there are more observations after the merge than before..
+table(merge1$ImpType)
+
+# are duplicate propertyIDs causing the increase in observations?
+dupes <- data.frame(table(merge1$PropID))
+sum(dupes$Freq > 1)
+```
+
+
+## Overlap sales history data with BLI constraints?
+How many properties in the above sample are actually located within a constraint zone? 
+
+Aside from mapping using the Master All Addresses choice from Portland Maps and overlaying the constraints and the properties using PropID in our sample, could try to construct a mapping thru keys we have. 
+
+PropID -> StateID or TLID 
+
+```{r}
+keep <- grepl("(?i)id", unlist(allvars), perl=TRUE)
+unlist(allvars)[keep]
+```
+From the above code, this may not be possible because all ID variables listed are not of the desired type. 
+
+### Grab ID dictionary from PDX maps
+
+Using the Master_Address_Points excel spreadsheet, took the ID columns and saved as new excel file. Hopefully we can just bring these in and get correspondence between StateID and PropertyID.
+
+```{r}
+# how many properties have more than one constraint?
+# inferred because some state ids occur more than once
+tib <- data.frame(table(constraints$STATE_ID))
+sum(tib$Freq > 1)
+sum(tib$Freq == 1)
+
+
+library(readr)
+dictID <- read_csv("Desktop/thesis/property-stateID.csv")
+
+class(constraints$STATE_ID)
+dictID$STATE_ID <- as.factor(dictID$STATE_ID)
+const <- left_join(constraints, dictID, by = "STATE_ID")
+colnames(constraints)
+
+# Check how many duplicates we have for each ID (is there a 1:1 corresp
+# between all the IDs). We hope the answer is yes, but it's more likely
+# to be no
+sum(data.frame(table(constraints$LOT_ID))$Freq > 1) #gives all duplicates on LOT_ID
+sum(data.frame(table(constraints$STATE_ID))$Freq > 1)
+sum(data.frame(table(constraints$TLID))$Freq > 1)
+
+# Check the ID dictionary (these checks don't guarantee 1:1 corresp)
+sum(data.frame(table(dictID$PROPERTY_ID))$Freq > 1)
+sum(data.frame(table(dictID$STATE_ID))$Freq > 1)
+
+# look at properties that have both stateID and propertyID recorded
+d <- dictID %>% 
+  filter(!is.na(STATE_ID) & !is.na(PROPERTY_ID))
+dim(d) # got rid of roughly 100k observations
+
+# check if we have the same number of duplicates for each id
+
+sum(data.frame(table(d$STATE_ID))$Freq > 1)
+```
+
+From the code below, we can see that there are 30k more unique STATEIDs than PROPERTYIDS for all of Portland (all maps containing both a state and a property id). 
+
+It could be that StateID is coded as -_ _ _ _ _ and _ _ _ _ _, difference between new and old StateIDs
+
+```{r}
+# Number of unique ids
+dim(data.frame(table(d$PROPERTY_ID)))
+dim(data.frame(table(d$STATE_ID))) 
+
+dim(data.frame(table(dictID$PROPERTY_ID)))
+dim(data.frame(table(dictID$STATE_ID))) 
+
+# How does stateid differ across property ids?
+sum(grepl("-", d$STATE_ID))
+sum(grepl(" ", d$STATE_ID))
+```
+
+
+
+### Setting up constraints
+All of our constraint variables are polygons, and therefore just "True" or empty. So the properties in this dataset are only a subset of the total number of properties we will analyze.
+
+```{r}
+const <- grepl("con", colnames(constraints))
+polys <- constraints[,const]
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
