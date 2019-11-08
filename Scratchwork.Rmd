@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(lubridate)
 library(sf)
 library(dplyr)
-library(reshape)
+library(reshape2)
 gdb <- "/Users/salmahuque/Desktop/BigThesis/Reed/data.gdb"
 layers <- st_layers(gdb)
 layers
@@ -81,6 +81,7 @@ test <- bind_cols(
   rollhistwide_obs <- filter(roll_history_wide, PropertyID %in% bigid)
   )
 
+
 leftover: 
   bli_obs == 0 #because contraints not available
   impseg_obs == 9
@@ -90,6 +91,11 @@ leftover:
   rollvals_obs == 44
   segchar_obs == 0
   
+#reshaping obs
+copimpseg_reshape <- dcast(copimpseg_obs, PropID + TaxYear ~ SegmentType, value.var = "SegmentSqFt") 
+impseg_reshape <- dcast(impseg_obs, PropertyID ~ Seg_Type) 
+rollhist_reshape <- dcast(rollhist_obs, PropertyID ~ year)
+rollvals_reshape <- dcast(rollvals_obs, PropertyID ~ year)
   
 selectanobs <- function(letter_id, number_id, state_id, rno) {
   (filter(bli_devo_cap, RNO == rno)
