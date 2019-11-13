@@ -1,12 +1,54 @@
 ---
-title: "initial data scratch"
+title: "initial data cleaning"
 output: pdf_document
 ---
 
+## Load packages
 ```{r}
-datanames <- c("gisimpcop", "impsegcop", "gispropcop", "allpropcop", "segchar", "rollhist", "impseg", "salescop","school", "imp", "constraints")
+library(tidyr)
+library(dplyr)
+library(sf)
+library(stringr)
+library(data.table)
+
+datanames <- c("gisimpcop", "impsegcop", "gispropcop", "allpropcop", "segchar", "rollhist", "impseg", "salescop","school", "imp", "constraints", "rollhist_wide")
 datanames
 ```
+## Set pathnames and load databases
+```{r}
+# The geodatabase Nick sent via email on 10/29
+gdb <- "DATA/data.gdb"
+
+constraints <- st_read(gdb, layer = "bli_development_capacity")
+gisimpcop <- st_read(gdb, layer = "CoP_GISImprovement")
+impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
+gispropcop <- st_read(gdb, layer = "CoP_GISProperty")
+allpropcop <- st_read(gdb, layer = "CoP_AllProperties")
+segchar <- st_read(gdb, layer = "Seg_Char")
+rollhist <- st_read(gdb, layer = "roll_history")
+rollhist_wide <- st_read(gdb, layer = "roll_history_wide")
+#rollvals <- st_read(gdb, layer = "roll_values")
+impseg <- st_read(gdb, layer = "imp_segments")
+salescop <- st_read(gdb, layer = "CoP_OrionSalesHistory")
+school <- st_read(gdb, layer = "school_attendance_areas")
+imps <- st_read(gdb, layer = "improvements")
+
+firelu <- st_read(gdb, layer = "Fireplace_Lookup")
+segmentlu <- st_read(gdb, layer = "Segment_Type_Lookup")
+imptypelu <- st_read(gdb, layer = "Imp_Type_Lookup")
+impcodeslu <- st_read(gdb, layer = "Improvement_Codes_Lookup") 
+propcodelu <- st_read(gdb, layer = "Property_Code_Lookup") 
+plumblu <- st_read(gdb, layer = "Plumbing_Lookup")
+
+#----------------------
+# GDB sent 10/10 via USB
+gdb2 <- "DATA/datanew.gdb"
+
+taxlots <- st_read(gdb2, "taxlots_20191010")
+footprints <- st_read(gdb2, "building_footprints_20191010")
+
+```
+
 
 ### Column Names/Keys to join:
 ```{r}
@@ -19,21 +61,25 @@ composed <- function(name){
   colnames(get(name))
 }
 
+# give a list of every variable we have across all layers
 allvars <- lapply(datanames, composed)
-names(allvars) <- datanames
 
+names(allvars) <- datanames
+#------------------------------
 id_list <- list(c(), length(datanames))
 for(i in 1:length(allvars)){
   id_list[i] <- allvars[[i]][grepl("ID", allvars[[i]])]
 }
 names(id_list) <- datanames
+impseg$Perimeter_feet
+segchar$AM_Fire_Places
 
 allvars
 
 # has prefix
 segchar$PropertyID
 rollhist$PropertyID
-salescop$PropertyID
+salescop$PropID
 gisimpcop$PropID
 impsegcop$PropID
 gispropcop$PropID
@@ -41,6 +87,9 @@ impseg$PropertyID
 
 # this does not have letter prefix
 allpropcop$PropertyID
+
+find <- grepl(c("SQFT"), unlist(allvars))
+unlist(allvars)[find]
 ```
 
 ### Finding Carlton house...
@@ -71,7 +120,6 @@ impsegcop %>% filter(PropID == id)
 ```
 
 ### Property Type: Residential, Mixed-use, Multifamily
-
 ```{r}
 levels(gispropcop$PropertyType)
 levels(constraints$GEN_USE)
@@ -79,9 +127,6 @@ levels(constraints$GEN_ZONE)
 levels(constraints$REG_ZONE)
 levels(constraints$NEWDESIG)
 levels(imp$Imp_Type)
-
-
-
 ```
 
 ### Messy joins:
@@ -214,7 +259,70 @@ const <- grepl("con", colnames(constraints))
 polys <- constraints[,const]
 ```
 
+# The following data frames need to be reshaped:
+```{r}
+# 1. Sales History
+sum(data.frame(table(salescop$PropID))$Freq > 1)
 
+# 2. CoP_OrionImprovementSegment
+sum(data.frame(table(impsegcop$PropID))$Freq > 1)
+
+# 3. CoP_GISProperty
+sum(data.frame(table(gispropcop$PropID))$Freq > 1)
+
+# 4. CoP_GISImprovement
+sum(data.frame(table(gisimpcop$PropID))$Freq > 1)
+
+# 5. CoP_AllProperties - no prefix
+sum(data.frame(table(allpropcop$PropertyID))$Freq > 1)
+
+# 6. improvements 
+sum(data.frame(table(imp$PropertyID))$Freq > 1)
+max(data.frame(table(imp$PropertyID))$Freq)
+
+# 7. Seg_Char, 
+sum(data.frame(table(segchar$PropertyID))$Freq > 1)
+max(data.frame(table(segchar$PropertyID))$Freq)
+
+```
+
+### RESHAPE: Seg_Char, segchar
+```{r}
+subsegchar <- segchar[1:100,]
+
+names <- colnames(segchar)
+drop <- c("SegID","Structure_Num","PropertyID", "Segment_Num")
+keep <- names[!names %in% drop]
+
+# PropertyID identifies a row to cast multiple columns upon
+# the formula LHS ~ RHS must uniquely identify an observation in the long form, otherwise 
+# the fun.aggregate defaults to counts.
+segchar_wide <- dcast(setDT(subsegchar), PropertyID ~ Structure_Num + Segment_Num, value.var=c(keep))
+
+
+```
+
+
+### RESHAPE: Improvements, imp
+```{r}
+
+
+```
+
+### Aside: some taxlots are not 1 row:1 PROPERTYID
+Chunk below identifies these observations to be analyzed or collapsed separately. Note that we do not have the same problem for stateID.
+
+```{r}
+ind <- data.frame(table(taxlots$PROPERTYID))$Freq > 1
+multiobs <- taxlots$PROPERTYID[ind]
+icky <- taxlots %>% 
+  filter(PROPERTYID %in% multiobs)
+
+head(icky) %>% select(RNO, STATE_ID, SITEADDR, PRPCD_DESC)
+
+
+
+```
 
 
 
