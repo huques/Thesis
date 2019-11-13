@@ -36,8 +36,8 @@ gispropcop <- st_read(gdb, layer = "CoP_GISProperty")
 allpropcop <- st_read(gdb, layer = "CoP_AllProperties")
 segchar <- st_read(gdb, layer = "Seg_Char")
 rollhist <- st_read(gdb, layer = "roll_history")
-# rollwide <- st_read(gdb, layer = "roll_histoy_wide")
-# rollvals <- st_read(gdb, layer = "roll_values")
+#rollwide <- st_read(gdb, layer = "roll_histoy_wide")
+rollvals <- st_read(gdb, layer = "roll_values")
 impseg <- st_read(gdb, layer = "imp_segments")
 salescop <- st_read(gdb, layer = "CoP_OrionSalesHistory")
 school <- st_read(gdb, layer = "school_attendance_areas")
@@ -54,6 +54,38 @@ taxlots <- st_read(gdb2, layer = "taxlots_20191010")
 bliconstraints <- st_read(gdb2, layer = "bli_constraints_all")
 footprints <- st_read(gdb2, layer = "building_footprints_20191010")
 ```
+COLUMN NAMES
+
+```{r}
+#Ryan's code (edited)
+
+datanames <- c("constraints", "gisimpcop", "impsegcop", "gispropcop", "allpropcop", "segchar", "rollhist", "rollvals", "impseg", "salescop","school", "imp", "taxlots", "bliconstraints", "footprints") #missing rollwide
+datanames 
+
+#pget variable names in PRINT form
+for(i in datanames){
+  col <- colnames(get(i))
+  print(i)
+  print(col)
+}
+
+#function to get all of our variable names in LIST form
+composed <- function(name){
+  colnames(get(name))
+}
+allvars <- lapply(datanames, composed)
+names(allvars) <- datanames
+allvars
+
+#finds first(?) column name containing the phrase "ID" (broken)
+id_list <- list(c(), length(datanames)) #empty list
+for(i in 1:length(allvars)){
+  id_list[i] <- allvars[[i]][grepl("ID", allvars[[i]])] 
+}
+
+```
+
+
 
 LOOKING AT INDIVIDUAL HOUSES
 ```{r}
@@ -129,7 +161,7 @@ rollvals_reshape <- dcast(rollvals_obs, PropertyID ~ year)
 #IMPSEG FORMATTING LONG TO WIDE
 
 ```{r}
-#effective method from Ryan
+#Ryan's code
 
 names <- colnames(impseg)
 drop <- c("Segment_Num","Structure_Num","Seg_Type", "SegID", "PropertyID") #no need to be replicated
@@ -213,6 +245,73 @@ selectanobs <- function(letter_id, number_id, state_id, rno) {
 ```{r}
 
 join1 <- full_join(taxlots, impseg_wide, by = c("PROPERTYID" = "PropertyID"))
+
+```
+
+# LITERAL SCRATCHWORK
+
+```{r}
+[1]   "TaxYear"       "PropID"        "AltAcctNum"   
+ [5] "MapTaxLot"          "Legal"         "TractLot"     
+ [9]       "LocationCode"  "LocationName" 
+[13] "MortgageCode"  "AccountStatus" "LevyCodeArea"      
+[17] "PropertyType"  "PropertyFlags" "SerialNumber"  "XplateNumber" 
+[21] "MaindPropID"   "ImpCount"      "IndusSiteNum"  "PropClass"    
+[25] "PropCode"      "LandCount"         
+[29] "Inspection"        "InstrumentNum"     
+[33] "SalePrice"     "SaleDate"      "Exemptions"    "LandRMV"      
+[37] "LandAgMkt"     "ImpRMV"        "TotalRMV"      "MAV"          
+[41]   "MSAV"          "SAV"    
+
+[1] "PropertyID"    "TaxYear"       "PropID"        "AltAcctNum"   
+ [5] "MapTaxLot"     "MapID"         "Legal"         "TractLot"     
+ [9] "Block"         "AddlLegalCode" "LocationCode"  "LocationName" 
+[13] "MortgageCode"  "AccountStatus" "LevyCodeArea"  "NbhdCode"     
+[17] "PropertyType"  "PropertyFlags" "SerialNumber"  "XplateNumber" 
+[21] "MaindPropID"   "ImpCount"      "IndusSiteNum"  "PropClass"    
+[25] "PropCode"      "LandCount"     "LastApprDate"  "Appraiser"    
+[29] "Inspection"    "DeedType"      "InstrumentNum" "DeedDate"     
+[33] "SalePrice"     "SaleDate"      "Exemptions"    "LandRMV"      
+[37] "LandAgMkt"     "ImpRMV"        "TotalRMV"      "MAV"          
+[41] "M50Assessed"   "MSAV"          "SAV"    
+
+
+
+
+
+
+
+
+$taxlots
+ [1] "AREA"       "RNO"            
+ [5]        
+ [9]            
+[13]        
+[17]  "PRPCD_DESC"      
+[21]       "UNITS"       
+[25] "MKTVALYR1"     "BLDGVAL1"        
+[29] "MKTVALYR2"     "BLDGVAL2"     
+[33] "MKTVALYR3"     "BLDGVAL3"      
+[37]   "A_T_SQFT"    
+[41] "A_T_ACRES"    "FRONTAGE"       "SOURCE"      
+[45]   "TLID"         "Shape_Length" "Shape_Area"  
+[49] "Shape"       
+
+
+$taxlots
+ [1] "AREA"         "STATE_ID"     "RNO"          "OWNER1"      
+ [5] "OWNER2"       "OWNER3"       "OWNERADDR"    "OWNERCITY"   
+ [9] "OWNERSTATE"   "OWNERZIP"     "SITEADDR"     "SITECITY"    
+[13] "SITE_STATE"   "SITEZIP"      "LEGAL_DESC"   "TAXCODE"     
+[17] "PROP_CODE"    "PRPCD_DESC"   "LANDUSE"      "YEARBUILT"   
+[21] "BLDGSQFT"     "BEDROOMS"     "FLOORS"       "UNITS"       
+[25] "MKTVALYR1"    "LANDVAL1"     "BLDGVAL1"     "TOTALVAL1"   
+[29] "MKTVALYR2"    "LANDVAL2"     "BLDGVAL2"     "TOTALVAL2"   
+[33] "MKTVALYR3"    "LANDVAL3"     "BLDGVAL3"     "TOTALVAL3"   
+[37] "SALEDATE"     "SALEPRICE"    "ACC_STATUS"   "A_T_SQFT"    
+[41] "A_T_ACRES"    "FRONTAGE"     "COUNTY"       "SOURCE"      
+[45] "PROPERTYID"   "TLID"         "Shape_Length" "Shape_Area"  
+[49] "Shape"       
 
 ```
 
