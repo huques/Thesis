@@ -23,6 +23,11 @@ gdb <- "/Users/salmahuque/Desktop/BigThesis/Reed/data.gdb"
 layers <- st_layers(gdb)
 layers
 layers[["name"]]
+gdb2 <- "/Users/salmahuque/Desktop/BigThesis/Reed/data2.gdb"
+layers2 <- st_layers(gdb2)
+layers2
+layers2[["name"]]
+
 
 constraints <- st_read(gdb, layer = "bli_development_capacity")
 gisimpcop <- st_read(gdb, layer = "CoP_GISImprovement")
@@ -44,6 +49,10 @@ imptypelu <- st_read(gdb, layer = "Imp_Type_Lookup")
 impcodeslu <- st_read(gdb, layer = "Improvement_Codes_Lookup") 
 propcodelu <- st_read(gdb, layer = "Property_Code_Lookup") 
 plumblu <- st_read(gdb, layer = "Plumbing_Lookup")
+
+taxlots <- st_read(gdb2, layer = "taxlots_20191010") 
+bliconstraints <- st_read(gdb2, layer = "bli_constraints_all")
+footprints <- st_read(gdb2, layer = "building_footprints_20191010")
 ```
 
 LOOKING AT INDIVIDUAL HOUSES
@@ -129,7 +138,7 @@ keep <- names[!names %in% drop] #things being replicated
 library(data.table)
 subimpseg <- impseg[1:100,] #only ran first 100 for speed
 
-impseg_wide <- dcast(setDT(subimpseg), PropertyID ~ Segment_Num, value.var=c(keep))
+impseg_wide <- dcast(setDT(impseg), PropertyID ~ Segment_Num, value.var=c(keep))
 
 ```
 
@@ -192,9 +201,18 @@ selectanobs <- function(letter_id, number_id, state_id, rno) {
   filter(rollhist, PropertyID == letter_id)
   filter(rollwide, PropertyID == letter_id)
   filter(rollvals, PropertyID == letter_id)
-  filter(segchar, PropertyID == letter_id)
+  filter(segchar, PropertyID == letter_id)}
 
   
-}
+
+```
+
+
+# JOINING IMPSEG_WIDE AND TAXLOTS
+
+```{r}
+
+join1 <- full_join(taxlots, impseg_wide, by = c("PROPERTYID" = "PropertyID"))
+
 ```
 
