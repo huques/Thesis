@@ -7,109 +7,192 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
+#PACKAGES
 ```{r}
-#READING IN DATA
 library(lubridate)
 library(sf)
 library(dplyr)
 library(reshape2)
+```
+
+#READING IN DATA
+```{r}
+
 gdb <- "/Users/salmahuque/Desktop/BigThesis/Reed/data.gdb"
 layers <- st_layers(gdb)
 layers
+layers[["name"]]
 
+constraints <- st_read(gdb, layer = "bli_development_capacity")
+gisimpcop <- st_read(gdb, layer = "CoP_GISImprovement")
+impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
+gispropcop <- st_read(gdb, layer = "CoP_GISProperty")
+allpropcop <- st_read(gdb, layer = "CoP_AllProperties")
+segchar <- st_read(gdb, layer = "Seg_Char")
+rollhist <- st_read(gdb, layer = "roll_history")
+# rollwide <- st_read(gdb, layer = "roll_histoy_wide")
+# rollvals <- st_read(gdb, layer = "roll_values")
+impseg <- st_read(gdb, layer = "imp_segments")
+salescop <- st_read(gdb, layer = "CoP_OrionSalesHistory")
+school <- st_read(gdb, layer = "school_attendance_areas")
+imp <- st_read(gdb, layer = "improvements")
 
-school_zones <- st_read(gdb, layer = "school_attendance_areas")
-bli_devo_cap <- st_read(gdb, layer = "bli_development_capacity")
-cop_sales_history <- st_read(gdb, layer = "CoP_OrionSalesHistory")
-cop_improve_segment <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
-cop_gis_property <- st_read(gdb, layer = "CoP_GISProperty")
-cop_gis_improvement <- st_read(gdb, layer = "CoP_GISImprovement")
-cop_all_props <- st_read(gdb, layer = "CoP_AllProperties")
-roll_values <- st_read(gdb, layer = "roll_values")
-roll_history_wide <- st_read(gdb, layer = "roll_history_wide")
-roll_history <- st_read(gdb, layer = "roll_history")
-imp_segments <- st_read(gdb, layer = "imp_segments")
-seg_char <- st_read(gdb, layer = "Seg_Char")
-plumbing_lu <- st_read(gdb, layer = "Plumbing_Lookup")
-fireplace_lu <- st_read(gdb, layer = "Fireplace_Lookup")
-imp_type_lu <  st_read(gdb, layer = "Imp_Type_Lookup")
-imp_codes_lu <- st_read(gdb, layer = "Improvement_Codes_Lookup")
-seg_type_lu <- st_read(gdb, layer = "Segment_Type_Lookup")
-prop_code_lu <- st_read(gdb, layer = "Property_Code_Lookup")
-improvements <- st_read(gdb, layer = "improvements")
+firelu <- st_read(gdb, layer = "Fireplace_Lookup")
+segmentlu <- st_read(gdb, layer = "Segment_Type_Lookup")
+imptypelu <- st_read(gdb, layer = "Imp_Type_Lookup")
+impcodeslu <- st_read(gdb, layer = "Improvement_Codes_Lookup") 
+propcodelu <- st_read(gdb, layer = "Property_Code_Lookup") 
+plumblu <- st_read(gdb, layer = "Plumbing_Lookup")
 ```
 
+LOOKING AT INDIVIDUAL HOUSES
 ```{r}
-
+#carlton and yellow house ID's
 bigid <- c("R122577", "R290070")
 littleid <- c("79992", "241919")
 stid <- "1S2E17CD  19900"
 rno <- c("R110500190", "R842406870")
-  filter(bli_devo_cap, RNO == rno)
-  filter(cop_all_props, PropertyID == littleid)
-  filter(cop_gis_improvement, PropID == bigid)
-  filter(cop_gis_property, PropID == bigid)
-  filter(cop_improve_segment, PropID == bigid)
-  filter(cop_sales_history, PropID == bigid)
-  filter(imp_segments, PropertyID == bigid)
-  filter(improvements, PropertyID == bigid)
-  filter(roll_history, PropertyID == bigid)
-  filter(roll_history_wide, PropertyID == bigid)
-  filter(roll_values, PropertyID == bigid)
-  filter(seg_char, PropertyID == bigid)
 
+#pulling observations from files based on ID
+  filter(constraints, RNO == rno)
+  filter(allpropcop, PropertyID == littleid)
+  filter(gisimpcop, PropID == bigid)
+  filter(gispropcop, PropID == bigid)
+  filter(impsegcop, PropID == bigid)
+  filter(salescop, PropID == bigid)
+  filter(impseg, PropertyID == bigid)
+  filter(imp, PropertyID == bigid)
+  filter(rollhist, PropertyID == bigid)
+  # filter(rollwide, PropertyID == bigid)
+  # filter(rollvals, PropertyID == bigid)
+  filter(segchar, PropertyID == bigid)
+
+#binding carlton and yellow observations: unsuccessful attempt
 test <- bind_cols(
-  bli_obs <- filter(bli_devo_cap, RNO %in% rno),
-  allprop_obs <- filter(cop_all_props, PropertyID %in% littleid),
-  gisimp_obs <- filter(cop_gis_improvement, PropID %in% bigid),
-  gisprop_obs <- filter(cop_gis_property, PropID %in% bigid),
-  copimpseg_obs <- filter(cop_improve_segment, PropID %in% bigid),
-  saleshist_obs <- filter(cop_sales_history, PropID %in% bigid),
-  impseg_obs <- filter(imp_segments, PropertyID %in% bigid),
-  imps_obs <- filter(improvements, PropertyID %in% bigid),
-  rollhist_obs <- filter(roll_history, PropertyID %in% bigid),
-  rollhistwide_obs <- filter(roll_history_wide, PropertyID %in% bigid),
-  rollvals_obs <- filter(roll_values, PropertyID %in% bigid),
-  segchar_obs <- filter(seg_char, PropertyID %in% bigid)
+  bli_obs <- filter(constraints, RNO %in% rno),
+  allprop_obs <- filter(allpropcop, PropertyID %in% littleid),
+  gisimp_obs <- filter(gisimpcop, PropID %in% bigid),
+  gisprop_obs <- filter(gispropcop, PropID %in% bigid),
+  impsegcop_obs <- filter(impsegcop, PropID %in% bigid),
+  saleshist_obs <- filter(salescop, PropID %in% bigid),
+  impseg_obs <- filter(impseg, PropertyID %in% bigid),
+  imp_obs <- filter(improvements, PropertyID %in% bigid),
+  rollhist_obs <- filter(rollhist, PropertyID %in% bigid),
+  rollwide_obs <- filter(rollwide, PropertyID %in% bigid),
+  rollvals_obs <- filter(rollvals, PropertyID %in% bigid),
+  segchar_obs <- filter(segchar, PropertyID %in% bigid)
   )
 
+#Binding tables using good data
 test <- bind_cols(
-  allprop_obs <- filter(cop_all_props, PropertyID %in% littleid),
-  gisimp_obs <- filter(cop_gis_improvement, PropID %in% bigid),
-  gisprop_obs <- filter(cop_gis_property, PropID %in% bigid),
-  imps_obs <- filter(improvements, PropertyID %in% bigid),
-  rollhistwide_obs <- filter(roll_history_wide, PropertyID %in% bigid)
+  allprop_obs <- filter(allpropcop, PropertyID %in% littleid),
+  gisimp_obs <- filter(gisimpcop, PropID %in% bigid),
+  gisprop_obs <- filter(gispropcop, PropID %in% bigid),
+  imp_obs <- filter(imp, PropertyID %in% bigid)
+  # rollwide_obs <- filter(rollwide, PropertyID %in% bigid)
   )
 
-
-leftover: 
+#leftover: need to reshape
   bli_obs == 0 #because contraints not available
   impseg_obs == 9
   copimpseg_obs == 9
   saleshist_obs == 7
   rollhist_obs == 44
-  rollvals_obs == 44
+  # rollvals_obs == 44
   segchar_obs == 0
   
 #reshaping obs
-copimpseg_reshape <- dcast(copimpseg_obs, PropID + TaxYear ~ SegmentType, value.var = "SegmentSqFt") 
+impsegcop_reshape <- dcast(impsegcop_obs, PropID + TaxYear ~ SegmentType, value.var = "SegmentSqFt") 
+segchar_reshape <- dcast(segchar_obs, PropertyID ~ Segment_Num)
+
+segchar_melt <- melt(segchar, id= c("PropertyID", "Segment_Num"))
+segchar_question <- dcast(segchar_melt, PropertyID ~ variable)
+segchar_melt2 <- melt(segchar, id= "Segment_Num")
+
 impseg_reshape <- dcast(impseg_obs, PropertyID ~ Seg_Type) 
 rollhist_reshape <- dcast(rollhist_obs, PropertyID ~ year)
 rollvals_reshape <- dcast(rollvals_obs, PropertyID ~ year)
-  
+
+```
+
+
+#IMPSEG FORMATTING LONG TO WIDE
+
+```{r}
+#effective method from Ryan
+
+names <- colnames(impseg)
+drop <- c("Segment_Num","Structure_Num","Seg_Type", "SegID", "PropertyID") #no need to be replicated
+keep <- names[!names %in% drop] #things being replicated
+
+library(data.table)
+subimpseg <- impseg[1:100,] #only ran first 100 for speed
+
+impseg_wide <- dcast(setDT(subimpseg), PropertyID ~ Segment_Num, value.var=c(keep))
+
+```
+
+# IMPSEGCOP FORMATTING LONG TO WIDE
+
+```{r}
+names <- colnames(impsegcop)
+drop <- c("SegmentNbr","TaxYear","PropID", "PropertyID", "SegmentType", "ImprovementNbr") #no need to be replicated
+keep <- names[!names %in% drop] #things being replicated
+
+library(data.table)
+subimpsegcop <- impsegcop[1:100,]
+
+impsegcop_wide <- dcast(setDT(subimpsegcop), PropID ~ SegmentType, value.var = "SegmentSqFt") 
+```
+
+
+# SALESHIST FORMATTING LONG TO WIDE
+
+```{r}
+names <- colnames(salescop)
+drop <- c("PropertyID", "PropID") #no need to be replicated
+keep <- names[!names %in% drop] #things being replicated
+
+library(data.table)
+subsalescop <- salescop[1:100,]
+
+salescop_wide <- dcast(setDT(subsalescop), PropID ~l ) 
+```
+
+# ROLLHIST FORMATTING LONG TO WIDE
+
+```{r}
+names <- colnames(rollhist)
+drop <- c("PropertyID", "Roll_Num", "Roll_Date", "year") #no need to be replicated
+keep <- names[!names %in% drop] #things being replicated
+
+library(data.table)
+subrollhist <- rollhist[1:100,]
+
+rollhist_wide <- dcast(setDT(rollhist), PropertyID ~ year, value.var = c(keep)) 
+
+library(reshape2)
+data1 <- melt(rollhist, id.vars = c("PropertyID", "year"))
+dcast(data1, PropertyID ~ year)
+```
+
+```{r}
+
+#making a function to bind together obs
 selectanobs <- function(letter_id, number_id, state_id, rno) {
-  (filter(bli_devo_cap, RNO == rno)
-  filter(cop_all_props, PropertyID == number_id)
-  filter(cop_gis_improvement, PropID == letter_id)
-  filter(cop_gis_improvement, PropID == letter_id)
-  filter(cop_improve_segment, PropID == letter_id)
-  filter(cop_sales_history, PropID == letter_id)
-  filter(imp_segments, PropertyID == letter_id)
+  (filter(constraints, RNO == rno)
+  filter(allpropcop, PropertyID == number_id)
+  filter(gisimpcop, PropID == letter_id)
+  filter(gisimpcop, PropID == letter_id)
+  filter(impsegcop, PropID == letter_id)
+  filter(salescop, PropID == letter_id)
+  filter(impseg, PropertyID == letter_id)
   filter(improvements, PropertyID == letter_id)
-  filter(roll_history, PropertyID == letter_id)
-  filter(roll_history_wide, PropertyID == letter_id)
-  filter(roll_values, PropertyID == letter_id)
-  filter(seg_char, PropertyID == letter_id)
+  filter(rollhist, PropertyID == letter_id)
+  filter(rollwide, PropertyID == letter_id)
+  filter(rollvals, PropertyID == letter_id)
+  filter(segchar, PropertyID == letter_id)
 
   
 }
