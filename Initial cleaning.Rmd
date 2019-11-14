@@ -27,7 +27,7 @@ allpropcop <- st_read(gdb, layer = "CoP_AllProperties")
 segchar <- st_read(gdb, layer = "Seg_Char")
 rollhist <- st_read(gdb, layer = "roll_history")
 rollhist_wide <- st_read(gdb, layer = "roll_history_wide")
-#rollvals <- st_read(gdb, layer = "roll_values")
+rollvals <- st_read(gdb, layer = "roll_values")
 impseg <- st_read(gdb, layer = "imp_segments")
 salescop <- st_read(gdb, layer = "CoP_OrionSalesHistory")
 school <- st_read(gdb, layer = "school_attendance_areas")
@@ -46,7 +46,6 @@ gdb2 <- "DATA/datanew.gdb"
 
 taxlots <- st_read(gdb2, "taxlots_20191010")
 footprints <- st_read(gdb2, "building_footprints_20191010")
-
 ```
 
 
@@ -192,7 +191,6 @@ unlist(allvars)[keep]
 From the above code, this may not be possible because all ID variables listed are not of the desired type. 
 
 ### Grab ID dictionary from PDX maps
-
 Using the Master_Address_Points excel spreadsheet, took the ID columns and saved as new excel file. Hopefully we can just bring these in and get correspondence between StateID and PropertyID.
 
 ```{r}
@@ -259,7 +257,9 @@ const <- grepl("con", colnames(constraints))
 polys <- constraints[,const]
 ```
 
+
 # The following data frames need to be reshaped:
+What are the unique identifiers in each?
 ```{r}
 # 1. Sales History
 sum(data.frame(table(salescop$PropID))$Freq > 1)
@@ -278,15 +278,30 @@ sum(data.frame(table(allpropcop$PropertyID))$Freq > 1)
 
 # 6. improvements 
 sum(data.frame(table(imp$PropertyID))$Freq > 1)
-max(data.frame(table(imp$PropertyID))$Freq)
+max(data.frame(table(imp$PropertyID))$Freq) # gives max # of repeated prop IDs
 
 # 7. Seg_Char, 
 sum(data.frame(table(segchar$PropertyID))$Freq > 1)
 max(data.frame(table(segchar$PropertyID))$Freq)
 
+# 8. roll_values
+sum(data.frame(table(rollvals$PropertyID))$Freq > 1)
+
+# 9. impseg 
+sum(data.frame(table(impseg$PropertyID))$Freq > 1)
+
+# 10. rollhist 
+sum(data.frame(table(rollhist$PropertyID))$Freq > 1)
+
+# 11, footprints - uniquely identified by BLDG_ID!
+sum(data.frame(table(segchar$BLDG_ID))$Freq > 1)
+
+# 12. Constraints
+sum(data.frame(table(constraints$TLID))$Freq > 1)
+
 ```
 
-### RESHAPE: Seg_Char, segchar
+### RESHAPE LONG -> WIDE: Seg_Char, segchar
 ```{r}
 subsegchar <- segchar[1:100,]
 
@@ -297,16 +312,108 @@ keep <- names[!names %in% drop]
 # PropertyID identifies a row to cast multiple columns upon
 # the formula LHS ~ RHS must uniquely identify an observation in the long form, otherwise 
 # the fun.aggregate defaults to counts.
-segchar_wide <- dcast(setDT(subsegchar), PropertyID ~ Structure_Num + Segment_Num, value.var=c(keep))
+segchar_wide <- dcast(setDT(segchar), PropertyID ~ Structure_Num + Segment_Num, value.var=c(keep))
 
-
+sum(data.frame(table(gisimpcop$PropID))$Freq > 1)
 ```
 
 
-### RESHAPE: Improvements, imp
+### RESHAPE LONG -> WIDE: Improvements, imp
+Reshapes a smaller version of `imp` for speed.
 ```{r}
+subimp <- imp[1:100,]
+
+names <- colnames(imp)
+notused <- colnames(imp)[grepl("Not_Used", colnames(imp))]
+notid <- names[grepl("Not_Identified", names)]
+for(n in notid){
+  if(sum(!is.na(imp[n]))==0){
+    notid <- setdiff(notid, n)
+  }
+}
+drop <- c(notused, notid, "ImpID","PropertyID")
+keep <- names[!names %in% drop]
+
+# propertyID and structure_num uniquely id observations in `imp`
+imp_wide <- dcast(setDT(subimp), PropertyID ~ Structure_Num, value.var=c(keep))
+```
 
 
+### RESHAPE LONG -> WIDE: Roll_history
+```{r}
+subrollhist <- rollhist[1:100,]
+names <- colnames(subrollhist)
+
+drop <- c("Roll_Num","PropertyID")
+keep <- names[!names %in% drop]
+rollhist_wide <- dcast(setDT(subrollhist), PropertyID ~ year, value.var=c(keep))
+```
+
+### RESHAPE LONG -> WIDE: Imp_segments, impseg 
+```{r}
+names <- colnames(impseg)
+drop <- c("Segment_Num","Structure_Num","Seg_Type", "SegID", "PropertyID") #no need to be replicated
+keep <- names[!names %in% drop] #things being replicated
+subimpseg <- impseg[1:100,] #only ran first 100 for speed
+
+impseg_wide <- dcast(setDT(subimpseg), PropertyID ~ Segment_Num, value.var=c(keep))
+```
+
+
+### RESHAPE LONG -> WIDE: CoP_AllProperties, allpropcop 
+```{r}
+names <- colnames(allpropcop)
+drop <- c("RollYear", "PropertyID") #no need to be replicated
+keep <- names[!names %in% drop] #things being replicated
+suballpropcop <- allpropcop[1:100,] #only ran first 100 for speed
+
+allpropcop_wide <- dcast(setDT(suballpropcop), PropertyID ~ RollYear, value.var=c(keep))
+```
+
+
+### RESHAPE LONG -> WIDE: CoP_OrionImprovementSegment, impsegcop 
+```{r}
+names <- colnames(impsegcop)
+subimpsegcop <- impsegcop[1:100,]
+impsegcop_wide <- dcast(setDT(subimpsegcop), PropID ~ SegmentNbr, value.var = c("SegmentSqFt", "SegmentType"))
+```
+
+
+### RESHAPE LONG -> WIDE: CoP_GISImprovement, gisimpcop
+```{r}
+names <- colnames(gisimpcop)
+drop <- c("PropertyID", "PropID", "YearBuilt", "TaxYear") #no need to be replicated
+keep <- names[!names %in% drop] #thi
+subgisimpcop <- gisimpcop[1:100,]
+gisimpcop_wide <- dcast(setDT(subgisimpcop), PropID ~ YearBuilt, value.var = c(keep))
+```
+
+
+### RESHAPE LONG -> WIDE: roll_values, rollvals
+```{r}
+names <- colnames(rollvals)
+drop <- c("Segment_Num","Structure_Num","Seg_Type", "SegID", "PropertyID") #no need to be replicated
+keep <- names[!names %in% drop] #things being replicated
+subrollvals <- rollvals[1:100,] #only ran first 100 for speed
+
+rvs <- dcast(setDT(subrollvals), PropertyID ~ year, value.var=c(keep))
+```
+
+
+
+* * * 
+
+# Geometry merges
+
+### School catchment area to taxlots
+```{r}
+# Filter just the Carlton house
+carlton <- taxlots %>% 
+  filter(grepl("6728 SE CARLTON", SITEADDR))
+
+test <- st_intersection(carlton, school)
+test %>%
+  select(STATE_ID, OWNER1, BLDGVAL1, SITEADDR, HIGH_SCH, MIDDLE_SCH, ELEM_SCH)
 ```
 
 ### Aside: some taxlots are not 1 row:1 PROPERTYID
@@ -314,17 +421,38 @@ Chunk below identifies these observations to be analyzed or collapsed separately
 
 ```{r}
 ind <- data.frame(table(taxlots$PROPERTYID))$Freq > 1
-multiobs <- taxlots$PROPERTYID[ind]
+multi.obs <- taxlots$PROPERTYID[ind]
+
 icky <- taxlots %>% 
-  filter(PROPERTYID %in% multiobs)
+  filter(PROPERTYID %in% multi.obs)
 
 head(icky) %>% select(RNO, STATE_ID, SITEADDR, PRPCD_DESC)
-
-
-
 ```
 
 
+### Collapse Footprints by STATEID
+Suppose there are n_i building footprints associated with a particular STATEID or property. The for loop below loops over all STATEIDs and the n_i polygons chunked with property i. 
+
+* Assumes there are no overlapping building footprints
+```{r}
+sum(data.frame(table(footprints$STATE_ID))$Freq > 1)
+
+# Remove the geometry & copy the STATE_ID column from footprints
+footprints %>% 
+  select(STATE_ID, Shape, Shape_Area, Shape_Length)
+
+footprints %>%
+  group_by(STATE_ID) %>%
+  st_union()
+
+geom = list()
+for(i in 1:nrow(pol)) {
+  geom[[i]] = st_union(pol[pol[i, ], ])
+}
+geom = do.call(c, geom)
+
+st_union(test$Shape)
+```
 
 
 
