@@ -3,7 +3,7 @@ title: "initial data cleaning"
 output: pdf_document
 ---
 
-## Load packages
+## 1. Load packages
 ```{r}
 library(tidyr)
 library(dplyr)
@@ -11,10 +11,11 @@ library(sf)
 library(stringr)
 library(data.table)
 
-datanames <- c("gisimpcop", "impsegcop", "gispropcop", "allpropcop", "segchar", "rollhist", "impseg", "salescop","school", "imp", "constraints", "rollhist_wide")
+datanames <- c("gisimpcop", "impsegcop", "gispropcop", "allpropcop", "segchar", "rollhist", "impseg", "salescop","school", "imps", "constraints", "rollhist_wide", "taxlots", "footprints" )
 datanames
 ```
-## Set pathnames and load databases
+
+## 2. Set pathnames and load databases
 ```{r}
 # The geodatabase Nick sent via email on 10/29
 gdb <- "DATA/data.gdb"
@@ -27,7 +28,7 @@ allpropcop <- st_read(gdb, layer = "CoP_AllProperties")
 segchar <- st_read(gdb, layer = "Seg_Char")
 rollhist <- st_read(gdb, layer = "roll_history")
 rollhist_wide <- st_read(gdb, layer = "roll_history_wide")
-rollvals <- st_read(gdb, layer = "roll_values")
+#rollvals <- st_read(gdb, layer = "roll_values")
 impseg <- st_read(gdb, layer = "imp_segments")
 salescop <- st_read(gdb, layer = "CoP_OrionSalesHistory")
 school <- st_read(gdb, layer = "school_attendance_areas")
@@ -48,32 +49,31 @@ taxlots <- st_read(gdb2, "taxlots_20191010")
 footprints <- st_read(gdb2, "building_footprints_20191010")
 ```
 
+## 3. Exploratory code 
 
 ### Column Names/Keys to join:
 ```{r}
-for(i in datanames){
-  colnames(get(i))
-}
-
-# create function to get all of our variable names
+# create function to extract all variable names as strings within a given layer
 composed <- function(name){
   colnames(get(name))
 }
 
-# give a list of every variable we have across all layers
+# apply composed() over all layers (in `datanames`)
 allvars <- lapply(datanames, composed)
 
-names(allvars) <- datanames
-#------------------------------
-id_list <- list(c(), length(datanames))
-for(i in 1:length(allvars)){
-  id_list[i] <- allvars[[i]][grepl("ID", allvars[[i]])]
-}
-names(id_list) <- datanames
-impseg$Perimeter_feet
-segchar$AM_Fire_Places
+names(allvars) <- datanames # give the list clearer names
 
-allvars
+#------------------------------
+# Function to search all of our variable names for a given a string 
+findVar <- function(string, case_sensitive = F){
+  bool <- grepl(string, unlist(allvars), ignore.case = !case_sensitive) 
+  # lbool is a boolean vector denoting which vars contain the string
+  unlist(allvars)[bool] # subset total list of varnames by bool & return it
+}
+
+findVar("sqft")
+findVar("id")
+# -------------------------------
 
 # has prefix
 segchar$PropertyID
@@ -87,8 +87,6 @@ impseg$PropertyID
 # this does not have letter prefix
 allpropcop$PropertyID
 
-find <- grepl(c("SQFT"), unlist(allvars))
-unlist(allvars)[find]
 ```
 
 ### Finding Carlton house...
@@ -128,8 +126,7 @@ levels(constraints$NEWDESIG)
 levels(imp$Imp_Type)
 ```
 
-### Messy joins:
-
+### Test joins:
 ```{r}
 salescop$SaleDate <- as.Date(salescop$SaleDate)
 summary(salescop$SaleDate)
@@ -152,7 +149,6 @@ for(year in 2010:2019){
   invl <- paste(year - 4, year, sep = "-")
   print(paste(invl, nrow(trim), sep = ": "))
 }
-
 ```
 
 
@@ -190,10 +186,10 @@ unlist(allvars)[keep]
 ```
 From the above code, this may not be possible because all ID variables listed are not of the desired type. 
 
-### Grab ID dictionary from PDX maps
+### NO LONGER NECESSARY: Grab ID dictionary from PDX maps
 Using the Master_Address_Points excel spreadsheet, took the ID columns and saved as new excel file. Hopefully we can just bring these in and get correspondence between StateID and PropertyID.
 
-```{r}
+```{r eval=FALSE, include=TRUE}
 # how many properties have more than one constraint?
 # inferred because some state ids occur more than once
 tib <- data.frame(table(constraints$STATE_ID))
@@ -248,7 +244,6 @@ sum(grepl(" ", d$STATE_ID))
 ```
 
 
-
 ### Setting up constraints
 All of our constraint variables are polygons, and therefore just "True" or empty. So the properties in this dataset are only a subset of the total number of properties we will analyze.
 
@@ -257,8 +252,9 @@ const <- grepl("con", colnames(constraints))
 polys <- constraints[,const]
 ```
 
+* * * 
 
-# The following data frames need to be reshaped:
+## The following data frames need to be reshaped:
 What are the unique identifiers in each?
 ```{r}
 # 1. Sales History
@@ -311,10 +307,11 @@ keep <- names[!names %in% drop]
 
 # PropertyID identifies a row to cast multiple columns upon
 # the formula LHS ~ RHS must uniquely identify an observation in the long form, otherwise 
-# the fun.aggregate defaults to counts.
+# the aggregation function defaults to counts.
 segchar_wide <- dcast(setDT(segchar), PropertyID ~ Structure_Num + Segment_Num, value.var=c(keep))
 
-sum(data.frame(table(gisimpcop$PropID))$Freq > 1)
+sum(data.frame(table(gisimpcop$PropertyID))$Freq > 1)
+
 ```
 
 
@@ -323,6 +320,7 @@ Reshapes a smaller version of `imp` for speed.
 ```{r}
 subimp <- imp[1:100,]
 
+# this chunk removes empty columns: "Not_Used2", "Not_Used4", etc.
 names <- colnames(imp)
 notused <- colnames(imp)[grepl("Not_Used", colnames(imp))]
 notid <- names[grepl("Not_Identified", names)]
@@ -333,6 +331,7 @@ for(n in notid){
 }
 drop <- c(notused, notid, "ImpID","PropertyID")
 keep <- names[!names %in% drop]
+
 
 # propertyID and structure_num uniquely id observations in `imp`
 imp_wide <- dcast(setDT(subimp), PropertyID ~ Structure_Num, value.var=c(keep))
@@ -380,10 +379,11 @@ impsegcop_wide <- dcast(setDT(subimpsegcop), PropID ~ SegmentNbr, value.var = c(
 
 
 ### RESHAPE LONG -> WIDE: CoP_GISImprovement, gisimpcop
+* Needs fixing--apply different technique to this..
 ```{r}
 names <- colnames(gisimpcop)
 drop <- c("PropertyID", "PropID", "YearBuilt", "TaxYear") #no need to be replicated
-keep <- names[!names %in% drop] #thi
+keep <- names[!names %in% drop] 
 subgisimpcop <- gisimpcop[1:100,]
 gisimpcop_wide <- dcast(setDT(subgisimpcop), PropID ~ YearBuilt, value.var = c(keep))
 ```
@@ -399,6 +399,21 @@ subrollvals <- rollvals[1:100,] #only ran first 100 for speed
 rvs <- dcast(setDT(subrollvals), PropertyID ~ year, value.var=c(keep))
 ```
 
+
+### RESHAPE: CoP_GISImprovement, gisimpcop
+```{r}
+# 11/14: Code from Nick - finding property IDs with multiple observations
+multi_obs <- gisimpcop %>%
+  group_by(PropID) %>%
+  summarise(n = n()) %>%
+  filter(n > 1) %>% 
+  select(PropID)
+multi_obs <- multi_obs$PropID
+
+gisimpcop %>% 
+  filter(PropID %in% multi_obs) %>%
+  group_by(PropID)
+```
 
 
 * * * 
@@ -416,8 +431,8 @@ test %>%
   select(STATE_ID, OWNER1, BLDGVAL1, SITEADDR, HIGH_SCH, MIDDLE_SCH, ELEM_SCH)
 ```
 
-### Aside: some taxlots are not 1 row:1 PROPERTYID
-Chunk below identifies these observations to be analyzed or collapsed separately. Note that we do not have the same problem for stateID.
+#### [Aside: some taxlots are not 1 row:1 PROPERTYID]
+The observations below need to be looked at more carefully. StateID does not have the same problem.
 
 ```{r}
 ind <- data.frame(table(taxlots$PROPERTYID))$Freq > 1
@@ -434,6 +449,8 @@ head(icky) %>% select(RNO, STATE_ID, SITEADDR, PRPCD_DESC)
 Suppose there are n_i building footprints associated with a particular STATEID or property. The for loop below loops over all STATEIDs and the n_i polygons chunked with property i. 
 
 * Assumes there are no overlapping building footprints
+* not yet working 11/14
+
 ```{r}
 sum(data.frame(table(footprints$STATE_ID))$Freq > 1)
 
@@ -444,6 +461,9 @@ footprints %>%
 footprints %>%
   group_by(STATE_ID) %>%
   st_union()
+
+footprints %>% 
+  filter(is.na(STATE_ID))
 
 geom = list()
 for(i in 1:nrow(pol)) {
