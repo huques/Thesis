@@ -18,7 +18,6 @@ library(reshape2)
 
 #READING IN DATA
 ```{r}
-
 gdb <- "/Users/salmahuque/Desktop/BigThesis/Reed/data.gdb"
 layers <- st_layers(gdb)
 layers
@@ -37,12 +36,15 @@ allpropcop <- st_read(gdb, layer = "CoP_AllProperties")
 segchar <- st_read(gdb, layer = "Seg_Char")
 rollhist <- st_read(gdb, layer = "roll_history")
 #rollwide <- st_read(gdb, layer = "roll_histoy_wide")
-rollvals <- st_read(gdb, layer = "roll_values")
+#rollvals <- st_read(gdb, layer = "roll_values")
 impseg <- st_read(gdb, layer = "imp_segments")
 salescop <- st_read(gdb, layer = "CoP_OrionSalesHistory")
 school <- st_read(gdb, layer = "school_attendance_areas")
 imp <- st_read(gdb, layer = "improvements")
+```
 
+
+```{r}
 firelu <- st_read(gdb, layer = "Fireplace_Lookup")
 segmentlu <- st_read(gdb, layer = "Segment_Type_Lookup")
 imptypelu <- st_read(gdb, layer = "Imp_Type_Lookup")
@@ -59,7 +61,7 @@ COLUMN NAMES
 ```{r}
 #Ryan's code (edited)
 
-datanames <- c("constraints", "gisimpcop", "impsegcop", "gispropcop", "allpropcop", "segchar", "rollhist", "rollvals", "impseg", "salescop","school", "imp", "taxlots", "bliconstraints", "footprints") #missing rollwide
+datanames <- c("constraints", "gisimpcop", "impsegcop", "gispropcop", "allpropcop", "segchar", "rollhist", "impseg", "salescop","school", "imp", "taxlots", "bliconstraints", "footprints") #missing rollwide
 datanames 
 
 #pget variable names in PRINT form
@@ -312,6 +314,12 @@ $taxlots
 [41] "A_T_ACRES"    "FRONTAGE"     "COUNTY"       "SOURCE"      
 [45] "PROPERTYID"   "TLID"         "Shape_Length" "Shape_Area"  
 [49] "Shape"       
+
+```
+
+
+```{r}
+
 
 ```
 
