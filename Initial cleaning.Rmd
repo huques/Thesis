@@ -350,8 +350,8 @@ rollhist_wide <- dcast(setDT(subrollhist), PropertyID ~ year, value.var=c(keep))
 
 ### RESHAPE LONG -> WIDE: Imp_segments, impseg 
 ```{r}
-names <- colnames(impseg)
-drop <- c("Segment_Num","Structure_Num","Seg_Type", "SegID", "PropertyID") #no need to be replicated
+names <- colnames(newimpseg)
+drop <- c("Segment_Num","Seg_Type", "SegID", "PropertyID") #no need to be replicated
 keep <- names[!names %in% drop] #things being replicated
 subimpseg <- impseg[1:100,] #only ran first 100 for speed
 
