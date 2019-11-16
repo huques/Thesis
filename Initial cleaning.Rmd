@@ -11,7 +11,7 @@ library(sf)
 library(stringr)
 library(data.table)
 
-datanames <- c("gisimpcop", "impsegcop", "gispropcop", "allpropcop", "segchar", "rollhist", "impseg", "salescop","school", "imps", "constraints", "rollhist_wide", "taxlots", "footprints" )
+datanames <- c("gisimpcop", "impsegcop", "gispropcop", "allpropcop", "segchar", "rollhist", "impseg", "salescop","school", "imps", "constraints", "rollhist_wide", "taxlots", "footprints")
 datanames
 ```
 
@@ -410,10 +410,53 @@ multi_obs <- gisimpcop %>%
   select(PropID)
 multi_obs <- multi_obs$PropID
 
-gisimpcop %>% 
+repeat_obs <- gisimpcop %>% 
   filter(PropID %in% multi_obs) %>%
   group_by(PropID)
 ```
+
+### Function to split data frames by wanted property type
+```{r}
+levels(gisimpcop$ImpType)
+
+# convert repeat_obs tibble to a data frame
+repeat_obs <- as.data.frame(repeat_obs)
+
+ids <- as.character(unique(repeat_obs$PropID)) # all property ids associated with
+# more than one observation
+
+
+wanted.imp.types <- c("6PX", "7PX", "CND", "MFS", "MFR", "ADUA", "CAMEN", "CAPT", "Cbase", "CC", "CCC", "M", "MFG", "MFL", "MFS", "MHP", "MPX", "RCU", "ROW", "SFR", "TPX")
+
+split <- function(df, id){
+  df_segment <- df %>% 
+    filter(PropID == id)
+  if(any(df_segment$ImpType %in% wanted.imp.types)){
+    return(df_segment)
+  }
+  else{
+    return(NA)
+  }
+}
+
+frames <- lapply(ids, split, df = repeat_obs)
+
+# remove the missing data frames
+frames <- frames[!is.na(frames)]
+
+# bind the mini dfs together
+repeat_obs2 <- bind_rows(frames)
+
+taxlots %>% filter(PROPERTYID == "R148319")
+
+footprints %>% filter(STATE_ID == "1S2E19BB 15700")
+```
+
+```{r}
+imps
+
+```
+
 
 
 * * * 
@@ -472,6 +515,22 @@ for(i in 1:nrow(pol)) {
 geom = do.call(c, geom)
 
 st_union(test$Shape)
+```
+
+
+### Merge impsegcop_wide to taxlots
+Impsegcop_wide has the variables Attic, Garage, Patio, and the square footages associated with each. So we left_join these characteristics to the taxlots by PropertyID. 
+
+```{r}
+impsegcop_wide$PROPERTYID <- impsegcop_wide$PropID # add variable 
+# PROPERTYID to the impsegwide_cop df, so we can join by consistent name
+merged <- left_join(taxlots, impsegcop_wide, by = "PROPERTYID")
+glimpse(merged)
+
+# MERGE SCHOOL CATCHMENT AREA
+merged <- st_intersection(merged, school)
+
+
 ```
 
 
