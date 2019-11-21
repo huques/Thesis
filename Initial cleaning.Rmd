@@ -433,6 +433,8 @@ impsegcop_dropped <- impsegcop_dropped %>%
             #breezeway = sum(`BREEZEWAY`, na.rm = T))
               
             
+impsegkeep <- c("PropertyID", "Segment_Num", "SegID", "Seg_Type", "Plumbing_Code", "Fire_Place_Code", "Number_of_Rooms", "Condition_Code") 
+newimpseg <- impseg(impsegkeep)
 
 names <- colnames(newimpseg)
 drop <- c("Segment_Num","Seg_Type", "SegID", "PropertyID") #no need to be replicated
