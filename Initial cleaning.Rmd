@@ -49,6 +49,8 @@ taxlots <- st_read(gdb2, "taxlots_20191010")
 footprints <- st_read(gdb2, "building_footprints_20191010")
 ```
 
+
+
 ## 3. Exploratory code 
 
 ### Column Names/Keys to join:
@@ -196,6 +198,22 @@ tib <- data.frame(table(constraints$STATE_ID))
 sum(tib$Freq > 1)
 sum(tib$Freq == 1)
 
+library(lwgeom)
+
+multi_obs <- constraints %>%
+  #st_cast("GEOMETRY") %>%
+  lwgeom::st_make_valid() %>%
+  group_by(STATE_ID) %>%
+  dplyr::summarise(n = n()) %>%
+  dplyr::filter(n > 1) %>% 
+  dplyr::select(STATE_ID)
+
+consubset <- constraints %>%
+  dplyr::filter(STATE_ID %in% multi_obs$STATE_ID) %>%
+  group_by(STATE_ID)
+
+consubset[1:20,] %>%
+  mapview()
 
 library(readr)
 dictID <- read_csv("Desktop/thesis/property-stateID.csv")
@@ -297,6 +315,7 @@ sum(data.frame(table(constraints$TLID))$Freq > 1)
 
 ```
 
+
 ### RESHAPE LONG -> WIDE: Seg_Char, segchar
 ```{r}
 subsegchar <- segchar[1:100,]
@@ -350,12 +369,80 @@ rollhist_wide <- dcast(setDT(subrollhist), PropertyID ~ year, value.var=c(keep))
 
 ### RESHAPE LONG -> WIDE: Imp_segments, impseg 
 ```{r}
+# Reshaping impseg
+multi_obs <- impseg %>%
+  group_by(PropertyID) %>%
+  summarise(n = n()) %>%
+  filter(n > 1) %>% 
+  pull(PropertyID)
+
+# convert factor to numeric variables
+impsegcop2 <- as.data.frame(lapply(impsegcop, function(x) as.numeric(as.character(x))))
+
+impsegcop2$PropID <- impsegcop$PropID
+impsegcop2$SegmentType <- impsegcop$SegmentType
+
+
+
+test <- impsegcop2 %>% 
+  dplyr::filter(PropID == "R143341") %>%
+  pivot_wider(names_from = SegmentType, values_from = SegmentSqFt) %>%
+  group_by(PropID) %>%
+  summarize(mainsqft = sum(MAIN, na.rm = T),
+            )
+
+# Mutate another column counting number of times we see same segment
+# type associated with same property
+multi_type <- impsegcop2 %>%
+  group_by(PropID, SegmentType) %>%
+  summarize(n = n())
+
+# Gather all weird  multi property ID, multi segment type observations
+drop <- multi_type %>%
+  group_by(PropID, SegmentType) %>%
+  filter(n > 1) %>%
+  pull(PropID)
+
+# drops the weird multi observations
+impsegcop_dropped <- impsegcop2 %>%
+  filter(!PropID %in% drop)
+
+# try salma's melting code
+test1 <- melt(impsegcop_dropped, id = c("PropID", "SegmentType"), variable = SegmentSqFt)
+test1 <- dcast(test1, PropID ~ SegmentType)
+
+# vector of variable names to loop over
+segcolumns <- levels(impsegcop$SegmentType)
+segcolumns <- segcolumns[c(-1)]
+
+impsegcop_dropped <- impsegcop_dropped[1:100,] %>%
+    pivot_wider(names_from = SegmentType, values_from = SegmentSqFt)
+
+# One method to reshape/rename impsegcop
+impsegcop_dropped <- impsegcop_dropped %>%
+  group_by(PropID) %>%
+  summarise(main = sum(MAIN, na.rm = T),
+            finattic  = sum(`FIN ATTIC`, na.rm = T),
+            unfattic = sum(`UNF BSMT`, na.rm = T),
+            built_in_gar = sum(`BUILT-IN GARAGE`, na.rm = T),
+            #encporch = sum(`ENC PORCH`, na.rm = T),
+            #covdeck = sum(`COV DECK`, na.rm = T),
+            #bsmtgar = sum(`BSMT GAR`, na.rm = T),
+            unfbsmt = sum(`UNF BSMT`, na.rm = T),
+            finbsmt = sum(`FIN BSMT`, na.rm = T))
+            #breezeway = sum(`BREEZEWAY`, na.rm = T))
+              
+            
+
 names <- colnames(newimpseg)
 drop <- c("Segment_Num","Seg_Type", "SegID", "PropertyID") #no need to be replicated
 keep <- names[!names %in% drop] #things being replicated
 subimpseg <- impseg[1:100,] #only ran first 100 for speed
 
 impseg_wide <- dcast(setDT(subimpseg), PropertyID ~ Segment_Num, value.var=c(keep))
+
+
+
 ```
 
 
@@ -415,6 +502,7 @@ repeat_obs <- gisimpcop %>%
   group_by(PropID)
 ```
 
+
 ### Function to split data frames by wanted property type
 ```{r}
 levels(gisimpcop$ImpType)
@@ -452,10 +540,6 @@ taxlots %>% filter(PROPERTYID == "R148319")
 footprints %>% filter(STATE_ID == "1S2E19BB 15700")
 ```
 
-```{r}
-imps
-
-```
 
 
 
@@ -518,19 +602,31 @@ st_union(test$Shape)
 ```
 
 
-### Merge impsegcop_wide to taxlots
-Impsegcop_wide has the variables Attic, Garage, Patio, and the square footages associated with each. So we left_join these characteristics to the taxlots by PropertyID. 
+### Merge impsegcop_wide to taxlots: Try running without subsetting impseg and impsegcop!
+Merge 1. Impsegcop_wide has the variables Attic, Garage, Patio, and the square footages associated with each. So we left_join these characteristics to the taxlots by PropertyID. 
+
+Merge 2. Impseg_wide to taxlots. The df impseg_wide contains our fireplace and bathroom variables.
+
+Merge 3. School catchment area to taxlots
 
 ```{r}
-impsegcop_wide$PROPERTYID <- impsegcop_wide$PropID # add variable 
+impsegcop_wide$PROPERTYID <- impsegcop_wide$PropID 
+impseg_wide$PROPERTYID <- impseg_wide$PropertyID 
+
+# add variable 
 # PROPERTYID to the impsegwide_cop df, so we can join by consistent name
+
+# Merge 1. impsegcop_wide
 merged <- left_join(taxlots, impsegcop_wide, by = "PROPERTYID")
 glimpse(merged)
 
-# MERGE SCHOOL CATCHMENT AREA
+# Merge 2. impseg_wide
+merged <- left_join(taxlots, impseg_wide, by = "PROPERTYID")
+glimpse(merged)
+
+# Merge 3.  SCHOOL CATCHMENT AREA
 merged <- st_intersection(merged, school)
-
-
+glimpse(impsegcop_wide)
 ```
 
 
