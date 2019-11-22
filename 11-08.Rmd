@@ -18,10 +18,10 @@ gispropcop <- st_read(gdb, layer = "CoP_GISProperty")
 allpropcop <- st_read(gdb, layer = "CoP_AllProperties")
 segchar <- st_read(gdb, layer = "Seg_Char")
 rollhist <- st_read(gdb, layer = "roll_history")
-rollvals <- st_read(gdb, layer = "roll_values")
+#rollvals <- st_read(gdb, layer = "roll_values")
 impseg <- st_read(gdb, layer = "imp_segments")
 salescop <- st_read(gdb, layer = "CoP_OrionSalesHistory")
-school <- st_read(gdb, layer = "school_attendance_areas")
+#school <- st_read(gdb, layer = "school_attendance_areas")
 imp <- st_read(gdb, layer = "improvements")
 
 firelu <- st_read(gdb, layer = "Fireplace_Lookup")
@@ -90,7 +90,31 @@ salma <- dcast(setDT(subimpseg), PropertyID~Segment_Num, value.var=c(keep))
 
 ```
 
+# Reshape the following data frames:
 
+```{r}
+# Sales History
+sum(data.frame(table(salescop$PropID))$Freq > 1)
+
+# CoP_OrionImprovementSegment
+sum(data.frame(table(impsegcop$PropID))$Freq > 1)
+
+# 
+sum(data.frame(table(gispropcop$PropID))$Freq > 1)
+
+sum(data.frame(table(gisimpcop$PropID))$Freq > 1)
+
+sum(data.frame(table(allpropcop$PropertyID))$Freq > 1)
+
+sum(data.frame(table(imp$PropertyID))$Freq > 1)
+
+#sum(data.frame(table(rollvals$PropertyID))$Freq > 1)
+
+sum(data.frame(table(segchar$PropertyID))$Freq > 1)
+
+head(problems)
+
+```
 
 
 
