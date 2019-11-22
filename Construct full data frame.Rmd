@@ -13,26 +13,29 @@ library(data.table)
 
 datanames <- c("gisimpcop", "impsegcop", "gispropcop", "allpropcop", "segchar", "rollhist", "impseg", "salescop","school", "imps", "constraints", "rollhist_wide", "taxlots", "footprints")
 datanames
+
+# Set working directory
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 ```
 
 ## 2. Set pathnames and load databases
 ```{r}
 # The geodatabase Nick sent via email on 10/29
-gdb <- "DATA/data.gdb"
+gdb <- "./DATA/data2.gdb"
 
 constraints <- st_read(gdb, layer = "bli_development_capacity")
-gisimpcop <- st_read(gdb, layer = "CoP_GISImprovement")
+#gisimpcop <- st_read(gdb, layer = "CoP_GISImprovement")
 impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
-gispropcop <- st_read(gdb, layer = "CoP_GISProperty")
-allpropcop <- st_read(gdb, layer = "CoP_AllProperties")
-segchar <- st_read(gdb, layer = "Seg_Char")
-rollhist <- st_read(gdb, layer = "roll_history")
-rollhist_wide <- st_read(gdb, layer = "roll_history_wide")
+#gispropcop <- st_read(gdb, layer = "CoP_GISProperty")
+#allpropcop <- st_read(gdb, layer = "CoP_AllProperties")
+#segchar <- st_read(gdb, layer = "Seg_Char")
+#rollhist <- st_read(gdb, layer = "roll_history")
+#rollhist_wide <- st_read(gdb, layer = "roll_history_wide")
 #rollvals <- st_read(gdb, layer = "roll_values")
 impseg <- st_read(gdb, layer = "imp_segments")
-salescop <- st_read(gdb, layer = "CoP_OrionSalesHistory")
+#salescop <- st_read(gdb, layer = "CoP_OrionSalesHistory")
 school <- st_read(gdb, layer = "school_attendance_areas")
-imps <- st_read(gdb, layer = "improvements")
+#imps <- st_read(gdb, layer = "improvements")
 
 firelu <- st_read(gdb, layer = "Fireplace_Lookup")
 segmentlu <- st_read(gdb, layer = "Segment_Type_Lookup")
@@ -43,7 +46,7 @@ plumblu <- st_read(gdb, layer = "Plumbing_Lookup")
 
 #----------------------
 # GDB sent 10/10 via USB
-gdb2 <- "DATA/datanew.gdb"
+gdb2 <- "./DATA/data1.gdb"
 
 taxlots <- st_read(gdb2, "taxlots_20191010")
 footprints <- st_read(gdb2, "building_footprints_20191010")
