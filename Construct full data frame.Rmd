@@ -92,6 +92,44 @@ sum(data.frame(table(taxlots_pruned$STATE_ID))$Freq > 1)
 sum(data.frame(table(taxlots_pruned$PROPERTYID))$Freq > 1)
 ```
 
+### Collapse footprints
+
+```{R}
+# Now we will try merging/collapsing footprints on this smaller
+# subset of the entire data set, only homes/MFR that have sold in the last
+# 5 years.
+
+# grab only the foot prints associated with stateids in our sample
+ftprints_pruned <- footprints %>%
+  filter(STATE_ID %in% stateids)
+
+# check if these ids uniquely identify the building footprints
+multi_foot <- ftprints_pruned %>%
+  lwgeom::st_make_valid() %>%
+  group_by(STATE_ID) %>%
+  mutate(n = n()) %>%
+  filter(n > 1)
+
+ids <- multi_foot %>% pull(STATE_ID)
+
+
+# Make collapsed footprints dataset called `allfeet`
+allfeet <- ftprints_pruned %>% 
+  lwgeom::st_make_valid() %>%
+  group_by(STATE_ID) %>%
+  summarise(totalsqft = sum(BLDG_SQFT, na.rm = T),
+            yearbuilt = mean(YEAR_BUILT, na.rm = T),
+            avgheight = mean(AVG_HEIGHT, na.rm = T),
+            surfelev = mean(SURF_ELEV, na.rm = T),
+            minheight = mean(MIN_HEIGHT, na.rm = T),
+            maxheight = mean(MAX_HEIGHT, na.rm = T),
+            volume = mean(VOLUME, na.rm = T),
+            bldgtype = BLDG_TYPE[1],
+            bldguse = BLDG_USE[1]) 
+dim(allfeet)
+
+```
+
 
 ### Prune and reshape impsegcop
 Impsegcop has our attached garage, patio, basement, attic, deck, variables among others. Reshape to get the square footage of each segment type. For properties that have multiple decks, attics, etc, the square footage was summed by type, so currently there is no way to distinguish between properties that have multiple attics or basements. We can think about whether proxying with a summed square footage is actually reasonable. 
@@ -263,6 +301,14 @@ glimpse(testjoint4)
 
 ```{r}
 glimpse(testjoint4)
+
+slim_tax <- taxlots %>%
+  select(STATE_ID, PROPERTYID)
+con_pt <- bli_constraints %>%
+  st_centroid()
+
+identified_const <- st_join(con_pt, slim_tax)
+
 
 
 ```
