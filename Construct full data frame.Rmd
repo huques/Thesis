@@ -307,4 +307,15 @@ identified_const <- st_join(con_pt, slim_tax)
 
 ```
 
+```{r}
+
+cityhall_coord <- data.frame(
+                 place=c("City Hall"),
+                 longitude=(-122.678904),
+                 latitude=(45.514858))
+
+cityhall <- st_as_sf(cityhall_coord, coords = c("longitude", "latitude")) %>%
+  st_set_crs(4326) %>%
+  st_transform(2913)
+```
 
