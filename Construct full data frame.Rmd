@@ -187,14 +187,14 @@ dim(impseg)
 
 is_pruned$PropertyID <- droplevels(is_pruned$PropertyID)
 
-# there are 6901 multi observations
+# there are 6901 multi observations 
+# multi_is is not essential to create the reshaped df
 multi_is <- is_pruned %>%
   group_by(PropertyID, Seg_Type) %>%
   mutate(n = n()) %>%
   filter(n > 1)
 
-save$Seg_Type <- droplevels(save$Seg_Type) # drops extra levels
-table(save$Seg_Type) # most of the information on plumbing code is
+# most of the information in plumbing code is
 # stored in the segment type: "MA"
 
 # ceiling height, number of rooms, condition code,
@@ -203,14 +203,17 @@ table(save$Seg_Type) # most of the information on plumbing code is
 # Q: what is interior_component_code?
 
 #--------------------------------------------
-# Using base r because dplyr code above taking too long
+# Using base r because dplyr code took too long
+
+# Take only observations for which Plumbing_Code is non-missing
 bath <- is_pruned[!is.na(is_pruned$Plumbing_Code),]
 bath <- bath %>% dplyr::select(PropertyID, Plumbing_Code, Seg_Type)
 
 bath$Seg_Type <- droplevels(bath$Seg_Type)
 table(bath$Seg_Type) # again, most of the bathrooms are in MA
 
-# There are 1657 properties with more than one MA
+# There are 1657 properties with more than one "MA" = "Main" segment
+# The code below tells us which properties these are...
 is_pruned %>%
   filter(Seg_Type == "MA") %>%
   group_by(PropertyID, Seg_Type) %>%
@@ -220,16 +223,19 @@ is_pruned %>%
 
 # ---------------------------------
 # Which segment types contain the fireplace code?
-
+# `fire` is a data frame of all nonmissing Fire_Place_Code observations
 fire <- is_pruned[!is.na(is_pruned$Fire_Place_Code),]
 fire <- fire %>% dplyr::select(PropertyID, Fire_Place_Code, Seg_Type)
 
 fire$Seg_Type <- droplevels(fire$Seg_Type)
 table(fire$Seg_Type) # again, most of the fire info is in MA
 # ---------------------------------
+
+# Change from factor to numeric in order to eventually summarise()
 is_pruned$Perimeter_feet <- as.numeric(is_pruned$Perimeter_feet)
 is_pruned$Neighborhood_Market_Value_Percent <- as.numeric(is_pruned$Neighborhood_Market_Value_Percent)
 
+# Generate the reshaped data frame, and save as all.is: "all.impseg"
 all.is <- is_pruned %>% 
   group_by(PropertyID) %>%
   summarise(totalarea = sum(Total_Area, na.rm = T),
@@ -240,9 +246,13 @@ all.is <- is_pruned %>%
             effarea = sum(Effective_Area, na.rm = T))
 dim(all.is) # dropped to 33290 properties
 
-# ------------Add bath & fire columns separately--------------------- 
+```
 
-# Bath is a data frame of all non-missing Plumbing_Code obs
+#### Add bath & fire columns to `all.is` separately
+Group by propertyID then collapse all Plumbing_Codes so
+PropertyID = 1, Plumbing_Code = "FB1"
+PropertyID = 1, Plumbing_Code = "HB2"  -->  PropertyID = 1, bath = "FB1|HB2"
+```{r}
 baths <- bath %>% group_by(PropertyID) %>%
   summarise(bath = paste0(unique(Plumbing_Code), collapse = "|"))
 
@@ -290,21 +300,22 @@ glimpse(testjoint4)
 
 
 ### Constraints to taxlots
-Note that constraints are separated by taxlot but h
+Note that constraints are separated by taxlot but they are not identified by STATEID or PROPERTYID. We dentify them using a spatial join with taxlots. 
+
 ```{r}
-glimpse(testjoint4)
+dim(testjoint4)
 sum(data.frame(table(bli_constraints$STATE_ID))$Freq > 1)
 
 # grab the keys off taxlots
 slim_tax <- taxlots %>%
   select(STATE_ID, PROPERTYID)
 
-# use the centroids st_join
+# use the centroids in order to st_join
 con_pt <- bli_constraints %>%
   st_centroid()
 
+# join
 identified_const <- st_join(con_pt, slim_tax)
-
 ```
 
 ```{r}
