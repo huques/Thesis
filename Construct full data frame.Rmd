@@ -59,6 +59,7 @@ gdb3 <- "./DATA/data_20191112.gdb"
 st_layers(gdb3)
 
 bli_constraints <- st_read(gdb3, "bli_constraints_all")
+nbhd <- st_read(gdb3, "neighborhoods_no_overlap")
 
 ```
 
@@ -259,3 +260,9 @@ glimpse(testjoint4)
 
 
 ### Constraints to taxlots
+
+```{r}
+glimpse(testjoint4)
+
+
+```
