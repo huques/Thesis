@@ -25,7 +25,7 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 gdb <- "./DATA/data2.gdb"
 
 
-constraints <- st_read(gdb, layer = "bli_development_capacity")
+capacity <- st_read(gdb, layer = "bli_development_capacity")
 #gisimpcop <- st_read(gdb, layer = "CoP_GISImprovement")
 impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
 #gispropcop <- st_read(gdb, layer = "CoP_GISProperty")
@@ -96,6 +96,8 @@ sum(data.frame(table(taxlots_pruned$PROPERTYID))$Freq > 1)
 ### Collapse footprints
 
 ```{R}
+
+
 # Now we will try merging/collapsing footprints on this smaller
 # subset of the entire data set, only homes/MFR that have sold in the last
 # 5 years.
@@ -110,6 +112,8 @@ multi_foot <- ftprints_pruned %>%
   group_by(STATE_ID) %>%
   mutate(n = n()) %>%
   filter(n > 1)
+
+dim(multi_foot) # they do not
 
 # Make collapsed footprints dataset called `allfeet`
 allfeet <- ftprints_pruned %>% 
@@ -130,13 +134,14 @@ dim(allfeet)
 
 
 ### Prune and reshape impsegcop
-Impsegcop has our attached garage, patio, basement, attic, and deck variables among others. Reshape to get the square footage of each segment type. For properties that have multiple decks, attics, etc, the square footage was summed by type, so currently there is no way to distinguish between properties that have multiple attics or just one really large one. We can think about whether proxying with a summed square footage is actually reasonable. 
+Impsegcop has our attached garage, patio, basement, attic, deck, variables among others. Reshape to get the square footage of each segment type. For properties that have multiple decks, attics, etc, the square footage was summed by type, so currently there is no way to distinguish between properties that have multiple attics or basements. We can think about whether proxying with a summed square footage is actually reasonable. 
 ```{r}
 impsegcop$SegmentSqFt <- as.numeric(impsegcop$SegmentSqFt) # so we can eventually sum
 
 isc_pruned <- impsegcop %>%
   filter(PropID %in% propids)
 dim(isc_pruned)
+
 
 sum(data.frame(table(isc_pruned$PropID))$Freq > 1)
 
@@ -149,6 +154,8 @@ multi_isc <- isc_pruned %>%
 nrow(multi_isc)
 
 # Second attempt to widen using dcast: works perfectly on 1:1 data
+# Reshape using dcast. Set fun.aggregate to sum, which means that we 
+# sum the square footage across multiple obs.
 library(data.table)
 impsegcop_wide <- dcast(setDT(isc_pruned), PropID ~ SegmentType,
               value.var = c("SegmentSqFt"),
@@ -162,7 +169,7 @@ sum(data.frame(table(impsegcop_wide$PropID))$Freq > 1)
 
 
 ### Prune and Reshape Impseg
-We need the columns PlumbingCode and Fire_place_Lookup from the impseg df. However, it appears that there are other variables such as perimeter, neighborhood marketvalue, total area, etc. that could be useful for our analysis. 
+We need the columns PlumbingCode and Fire_place_Lookup from the impseg df. However, it appears that there are other value variables such as perimeter, neighborhood marketvalue, total area, etc. that could be useful for our analysis. 
 ```{r}
 glimpse(impseg)
 levels(impseg$Plumbing_Code)
@@ -175,25 +182,14 @@ impseg$Neighborhood_Market_Value_Percent <- as.numeric(impseg$Neighborhood_Marke
 
 is_pruned <- impseg %>%
   filter(PropertyID %in% propids)
-dim(is_pruned) #pulled roughly 1% of the properties in impseg
+dim(is_pruned) #took roughly 1% of the properties in impseg
 dim(impseg)
 
 is_pruned$PropertyID <- droplevels(is_pruned$PropertyID)
 
-# there are 6901 multiple observations
+# there are 6901 multi observations
 multi_is <- is_pruned %>%
   group_by(PropertyID, Seg_Type) %>%
-  mutate(n = n()) %>%
-  filter(n > 1)
-
-save <- multi_is %>%
-  group_by(PropertyID, Seg_Type) %>%
-  filter(!is.na(Plumbing_Code)) %>%
-  select(Seg_Type, Plumbing_Code)
-save$PropertyID <- droplevels(save$PropertyID)
-
-save %>%
-  group_by(PropertyID) %>%
   mutate(n = n()) %>%
   filter(n > 1)
 
@@ -247,12 +243,10 @@ dim(all.is) # dropped to 33290 properties
 # ------------Add bath & fire columns separately--------------------- 
 
 # Bath is a data frame of all non-missing Plumbing_Code obs
-baths <- bath %>% 
-  group_by(PropertyID) %>%
+baths <- bath %>% group_by(PropertyID) %>%
   summarise(bath = paste0(unique(Plumbing_Code), collapse = "|"))
 
-fires <- fire %>% 
-  group_by(PropertyID) %>%
+fires <- fire %>% group_by(PropertyID) %>%
   summarise(fireplace = paste0(unique(Fire_Place_Code), collapse = "|"))
 
 all.is <- left_join(all.is, baths, by = "PropertyID")
@@ -289,7 +283,6 @@ testjoint3 <- st_intersection(m2, school)
 
 ### Left join impseg to taxlots
 ```{r}
-
 all.is$PROPERTYID <- all.is$PropertyID
 testjoint4 <- left_join(testjoint3, all.is, by = "PROPERTYID")
 glimpse(testjoint4)
@@ -297,17 +290,21 @@ glimpse(testjoint4)
 
 
 ### Constraints to taxlots
-
+Note that constraints are separated by taxlot but h
 ```{r}
 glimpse(testjoint4)
+sum(data.frame(table(bli_constraints$STATE_ID))$Freq > 1)
 
+# grab the keys off taxlots
 slim_tax <- taxlots %>%
   select(STATE_ID, PROPERTYID)
+
+# use the centroids st_join
 con_pt <- bli_constraints %>%
   st_centroid()
 
 identified_const <- st_join(con_pt, slim_tax)
 
-
-
 ```
+
+
