@@ -10,6 +10,7 @@ library(dplyr)
 library(sf)
 library(stringr)
 library(data.table)
+library(lwgeom)
 
 datanames <- c("gisimpcop", "impsegcop", "gispropcop", "allpropcop", "segchar", "rollhist", "impseg", "salescop","school", "imps", "constraints", "rollhist_wide", "taxlots", "footprints")
 datanames
@@ -110,9 +111,6 @@ multi_foot <- ftprints_pruned %>%
   mutate(n = n()) %>%
   filter(n > 1)
 
-ids <- multi_foot %>% pull(STATE_ID)
-
-
 # Make collapsed footprints dataset called `allfeet`
 allfeet <- ftprints_pruned %>% 
   lwgeom::st_make_valid() %>%
@@ -132,7 +130,7 @@ dim(allfeet)
 
 
 ### Prune and reshape impsegcop
-Impsegcop has our attached garage, patio, basement, attic, deck, variables among others. Reshape to get the square footage of each segment type. For properties that have multiple decks, attics, etc, the square footage was summed by type, so currently there is no way to distinguish between properties that have multiple attics or basements. We can think about whether proxying with a summed square footage is actually reasonable. 
+Impsegcop has our attached garage, patio, basement, attic, and deck variables among others. Reshape to get the square footage of each segment type. For properties that have multiple decks, attics, etc, the square footage was summed by type, so currently there is no way to distinguish between properties that have multiple attics or just one really large one. We can think about whether proxying with a summed square footage is actually reasonable. 
 ```{r}
 impsegcop$SegmentSqFt <- as.numeric(impsegcop$SegmentSqFt) # so we can eventually sum
 
@@ -164,7 +162,7 @@ sum(data.frame(table(impsegcop_wide$PropID))$Freq > 1)
 
 
 ### Prune and Reshape Impseg
-We need the columns PlumbingCode and Fire_place_Lookup from the impseg df. However, it appears that there are other value variables such as perimeter, neighborhood marketvalue, total area, etc. that could be useful for our analysis. 
+We need the columns PlumbingCode and Fire_place_Lookup from the impseg df. However, it appears that there are other variables such as perimeter, neighborhood marketvalue, total area, etc. that could be useful for our analysis. 
 ```{r}
 glimpse(impseg)
 levels(impseg$Plumbing_Code)
@@ -177,22 +175,22 @@ impseg$Neighborhood_Market_Value_Percent <- as.numeric(impseg$Neighborhood_Marke
 
 is_pruned <- impseg %>%
   filter(PropertyID %in% propids)
-dim(is_pruned) #took roughly 1% of the properties in impseg
+dim(is_pruned) #pulled roughly 1% of the properties in impseg
 dim(impseg)
 
 is_pruned$PropertyID <- droplevels(is_pruned$PropertyID)
 
-# there are 6901 multi observations
+# there are 6901 multiple observations
 multi_is <- is_pruned %>%
   group_by(PropertyID, Seg_Type) %>%
   mutate(n = n()) %>%
   filter(n > 1)
 
-save$PropertyID <- droplevels(save$PropertyID)
 save <- multi_is %>%
   group_by(PropertyID, Seg_Type) %>%
   filter(!is.na(Plumbing_Code)) %>%
   select(Seg_Type, Plumbing_Code)
+save$PropertyID <- droplevels(save$PropertyID)
 
 save %>%
   group_by(PropertyID) %>%
@@ -249,10 +247,12 @@ dim(all.is) # dropped to 33290 properties
 # ------------Add bath & fire columns separately--------------------- 
 
 # Bath is a data frame of all non-missing Plumbing_Code obs
-baths <- bath %>% group_by(PropertyID) %>%
+baths <- bath %>% 
+  group_by(PropertyID) %>%
   summarise(bath = paste0(unique(Plumbing_Code), collapse = "|"))
 
-fires <- fire %>% group_by(PropertyID) %>%
+fires <- fire %>% 
+  group_by(PropertyID) %>%
   summarise(fireplace = paste0(unique(Fire_Place_Code), collapse = "|"))
 
 all.is <- left_join(all.is, baths, by = "PropertyID")
@@ -265,7 +265,6 @@ all.is <- left_join(all.is, fires, by = "PropertyID")
 ```{r}
 dim(taxlots_pruned)
 dim(allfeet)
-left_join(taxlots_pruned, allfeet, by = "STATE_ID")
 
 testjoint <- st_join(taxlots_pruned, allfeet, left = T)
 testjoint2 <- st_intersection(taxlots_pruned, allfeet)
