@@ -51,6 +51,15 @@ gdb2 <- "./DATA/data1.gdb"
 
 taxlots <- st_read(gdb2, "taxlots_20191010")
 footprints <- st_read(gdb2, "building_footprints_20191010")
+
+
+#----------------------
+# GDB sent 11/21
+gdb3 <- "./DATA/data_20191112.gdb"
+st_layers(gdb3)
+
+bli_constraints <- st_read(gdb3, "bli_constraints_all")
+
 ```
 
 ### Take sample of taxlots
