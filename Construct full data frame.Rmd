@@ -1,0 +1,248 @@
+---
+title: "Load data -> join"
+output: html_document
+---
+
+## 1. Load packages
+```{r}
+library(tidyr)
+library(dplyr)
+library(sf)
+library(stringr)
+library(data.table)
+
+datanames <- c("gisimpcop", "impsegcop", "gispropcop", "allpropcop", "segchar", "rollhist", "impseg", "salescop","school", "imps", "constraints", "rollhist_wide", "taxlots", "footprints")
+datanames
+```
+
+## 2. Set pathnames and load databases
+```{r}
+# The geodatabase Nick sent via email on 10/29
+gdb <- "DATA/data.gdb"
+
+constraints <- st_read(gdb, layer = "bli_development_capacity")
+gisimpcop <- st_read(gdb, layer = "CoP_GISImprovement")
+impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
+gispropcop <- st_read(gdb, layer = "CoP_GISProperty")
+allpropcop <- st_read(gdb, layer = "CoP_AllProperties")
+segchar <- st_read(gdb, layer = "Seg_Char")
+rollhist <- st_read(gdb, layer = "roll_history")
+rollhist_wide <- st_read(gdb, layer = "roll_history_wide")
+#rollvals <- st_read(gdb, layer = "roll_values")
+impseg <- st_read(gdb, layer = "imp_segments")
+salescop <- st_read(gdb, layer = "CoP_OrionSalesHistory")
+school <- st_read(gdb, layer = "school_attendance_areas")
+imps <- st_read(gdb, layer = "improvements")
+
+firelu <- st_read(gdb, layer = "Fireplace_Lookup")
+segmentlu <- st_read(gdb, layer = "Segment_Type_Lookup")
+imptypelu <- st_read(gdb, layer = "Imp_Type_Lookup")
+impcodeslu <- st_read(gdb, layer = "Improvement_Codes_Lookup") 
+propcodelu <- st_read(gdb, layer = "Property_Code_Lookup") 
+plumblu <- st_read(gdb, layer = "Plumbing_Lookup")
+
+#----------------------
+# GDB sent 10/10 via USB
+gdb2 <- "DATA/datanew.gdb"
+
+taxlots <- st_read(gdb2, "taxlots_20191010")
+footprints <- st_read(gdb2, "building_footprints_20191010")
+```
+
+### Take sample of taxlots
+```{r}
+begin <- as.Date("2015-01-01")
+end <- as.Date("2019-01-01")
+
+# Reformat SALEDATE column (save as date type so that we can
+# do math on it)
+taxlots$saledate <- as.Date(as.character(taxlots$SALEDATE), "%m/%d/%Y")
+
+# Take time interval of taxlots we're interested in (5-years)
+taxlots_pruned <- taxlots %>%
+  filter(saledate > begin & saledate < end)
+
+dim(taxlots_pruned) 
+
+# Here, STATE_ID is the unique identifier
+glimpse(taxlots_pruned)
+
+# Grab keys to the lots we want for state and property ids
+stateids <- taxlots_pruned %>%
+  pull(STATE_ID)
+propids <- taxlots_pruned %>%
+  pull(PROPERTYID)
+
+# YAY! They're sums below are both zero, meaning we have 1:1 keys!
+sum(data.frame(table(taxlots_pruned$STATE_ID))$Freq > 1)
+sum(data.frame(table(taxlots_pruned$PROPERTYID))$Freq > 1)
+```
+
+
+### Prune and reshape impsegcop
+Impsegcop has our attached garage, patio, basement, attic, deck, variables among others. Reshape to get the square footage of each segment type. For properties that have multiple decks, attics, etc, the square footage was summed by type, so currently there is no way to distinguish between properties that have multiple attics or basements. We can think about whether proxying with a summed square footage is actually reasonable. 
+```{r}
+impsegcop$SegmentSqFt <- as.numeric(impsegcop$SegmentSqFt) # so we can eventually sum
+
+isc_pruned <- impsegcop %>%
+  filter(PropID %in% propids)
+dim(isc_pruned)
+
+sum(data.frame(table(isc_pruned$PropID))$Freq > 1)
+
+# check if propids ids uniquely identify the building footprints
+multi_isc <- isc_pruned %>%
+  group_by(PropID, SegmentType) %>%
+  mutate(n = n()) %>%
+  filter(n == 1)
+
+nrow(multi_isc)
+
+# Second attempt to widen using dcast: works perfectly on 1:1 data
+library(data.table)
+impsegcop_wide <- dcast(setDT(isc_pruned), PropID ~ SegmentType,
+              value.var = c("SegmentSqFt"),
+              fill = 0,
+              fun.aggregate = sum)
+
+# Code below turns 0 meaning PropID uniquely identifies observations
+sum(data.frame(table(impsegcop_wide$PropID))$Freq > 1)
+
+```
+
+
+### Prune and Reshape Impseg
+We need the columns PlumbingCode and Fire_place_Lookup from the impseg df. However, it appears that there are other value variables such as perimeter, neighborhood marketvalue, total area, etc. that could be useful for our analysis. 
+```{r}
+glimpse(impseg)
+levels(impseg$Plumbing_Code)
+levels(impseg$Fire_Place_Code)
+levels(impseg$Seg_Type)
+
+# change from factor to numeric
+impseg$Perimeter_feet <- as.numeric(impseg$Perimeter_feet)
+impseg$Neighborhood_Market_Value_Percent <- as.numeric(impseg$Neighborhood_Market_Value_Percent)
+
+is_pruned <- impseg %>%
+  filter(PropertyID %in% propids)
+dim(is_pruned) #took roughly 1% of the properties in impseg
+dim(impseg)
+
+is_pruned$PropertyID <- droplevels(is_pruned$PropertyID)
+
+# there are 6901 multi observations
+multi_is <- is_pruned %>%
+  group_by(PropertyID, Seg_Type) %>%
+  mutate(n = n()) %>%
+  filter(n > 1)
+
+save$PropertyID <- droplevels(save$PropertyID)
+save <- multi_is %>%
+  group_by(PropertyID, Seg_Type) %>%
+  filter(!is.na(Plumbing_Code)) %>%
+  select(Seg_Type, Plumbing_Code)
+
+save %>%
+  group_by(PropertyID) %>%
+  mutate(n = n()) %>%
+  filter(n > 1)
+
+save$Seg_Type <- droplevels(save$Seg_Type) # drops extra levels
+table(save$Seg_Type) # most of the information on plumbing code is
+# stored in the segment type: "MA"
+
+# ceiling height, number of rooms, condition code,
+# length, height is useless
+
+# Q: what is interior_component_code?
+
+#--------------------------------------------
+# Using base r because dplyr code above taking too long
+bath <- is_pruned[!is.na(is_pruned$Plumbing_Code),]
+bath <- bath %>% dplyr::select(PropertyID, Plumbing_Code, Seg_Type)
+
+bath$Seg_Type <- droplevels(bath$Seg_Type)
+table(bath$Seg_Type) # again, most of the bathrooms are in MA
+
+# There are 1657 properties with more than one MA
+is_pruned %>%
+  filter(Seg_Type == "MA") %>%
+  group_by(PropertyID, Seg_Type) %>%
+  mutate(n = n()) %>%
+  filter(n > 1) %>%
+  select(Fire_Place_Code, PropertyID, Plumbing_Code)
+
+# ---------------------------------
+# Which segment types contain the fireplace code?
+
+fire <- is_pruned[!is.na(is_pruned$Fire_Place_Code),]
+fire <- fire %>% dplyr::select(PropertyID, Fire_Place_Code, Seg_Type)
+
+fire$Seg_Type <- droplevels(fire$Seg_Type)
+table(fire$Seg_Type) # again, most of the fire info is in MA
+# ---------------------------------
+is_pruned$Perimeter_feet <- as.numeric(is_pruned$Perimeter_feet)
+is_pruned$Neighborhood_Market_Value_Percent <- as.numeric(is_pruned$Neighborhood_Market_Value_Percent)
+
+all.is <- is_pruned %>% 
+  group_by(PropertyID) %>%
+  summarise(totalarea = sum(Total_Area, na.rm = T),
+            mktval = mean(Market_Value, na.rm = T),
+            totalAdjPct = mean(Total_Adjustment_Percent, na.rm = T),
+            nbhdMktVal = mean(Neighborhood_Market_Value_Percent, na.rm = T),
+            Perimeter_feet = sum(Perimeter_feet, na.rm = T),
+            effarea = sum(Effective_Area, na.rm = T))
+dim(all.is) # dropped to 33290 properties
+
+# ------------Add bath & fire columns separately--------------------- 
+
+# Bath is a data frame of all non-missing Plumbing_Code obs
+baths <- bath %>% group_by(PropertyID) %>%
+  summarise(bath = paste0(unique(Plumbing_Code), collapse = "|"))
+
+fires <- fire %>% group_by(PropertyID) %>%
+  summarise(fireplace = paste0(unique(Fire_Place_Code), collapse = "|"))
+
+all.is <- left_join(all.is, baths, by = "PropertyID")
+all.is <- left_join(all.is, fires, by = "PropertyID") 
+```
+
+
+## JOINS
+### Left join footprints -> taxlots
+```{r}
+dim(taxlots_pruned)
+dim(allfeet)
+left_join(taxlots_pruned, allfeet, by = "STATE_ID")
+
+testjoint <- st_join(taxlots_pruned, allfeet, left = T)
+testjoint2 <- st_intersection(taxlots_pruned, allfeet)
+dim(testjoint)
+dim(testjoint2)
+```
+
+### Left join impsegcop_wide to taxlots
+```{r}
+impsegcop_wide$PROPERTYID <- impsegcop_wide$PropID # rename variable to join
+# by same id
+m <- left_join(taxlots_pruned, impsegcop_wide, 
+               by = "PROPERTYID")
+m2 <- left_join(testjoint2, impsegcop_wide, 
+                by = "PROPERTYID")       
+```
+
+### St_intersection school to taxlots
+```{r}
+testjoint3 <- st_intersection(m2, school)
+```
+
+### Left join impseg to taxlots
+```{r}
+
+all.is$PROPERTYID <- all.is$PropertyID
+testjoint4 <- left_join(testjoint3, all.is, by = "PROPERTYID")
+glimpse(testjoint4)
+```
+
+
+### Constraints to taxlots
