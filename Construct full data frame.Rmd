@@ -23,6 +23,7 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 # The geodatabase Nick sent via email on 10/29
 gdb <- "./DATA/data2.gdb"
 
+
 constraints <- st_read(gdb, layer = "bli_development_capacity")
 #gisimpcop <- st_read(gdb, layer = "CoP_GISImprovement")
 impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
