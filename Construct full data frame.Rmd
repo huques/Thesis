@@ -322,7 +322,6 @@ identified_const <- st_join(con_pt, slim_tax)
 ### Distance to CBD 
 Using City Hall as the CBD. Right now using Euclidean distance, might wanna go back and use street networks as well to compare. 
 ```{r}
-
 #creating city hall coordinate data frame
 cityhall_coord <- data.frame(
                  place=c("City Hall"),
