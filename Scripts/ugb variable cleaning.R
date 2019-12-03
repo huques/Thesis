@@ -63,9 +63,13 @@ ugb.sp <- as_Spatial(ugb)
 taxlots_pruned$dist2ugb <- as.numeric(st_distance(st_as_sf(
   rgeos::gNearestPoints(taxlots.sp, ugb.sp)[2,]), taxlots.sf))
 
-# This way keeps it as an sp object -- not working as of now!!!
-# taxplots_pruned$dist2ugb.sp <- raster::pointDistance(
-#   rgeos::gNearestPoints(taxlots.sp, ugb.sp)[2,], taxlots.sp)
+------------------------------------------------------------------------------------------------------
+
+# This way keeps it as an sp object -- not working as of now!!! 
+#Need to convert taxlots.sp to spatialPOINTSdataframe 
+#(currently in spatialPOLYGONdataframe -- perhaps?)
+taxplots_pruned$dist2ugb.sp <- raster::pointDistance(
+  rgeos::gNearestPoints(taxlots.sp, ugb.sp)[2,], taxlots.sp)
 
 
 
