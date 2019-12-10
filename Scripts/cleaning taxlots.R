@@ -1,11 +1,3 @@
-# This script should be run first because we prune the number of observations
-        # by the specified time period [begin, end] below. Therefore we can run
-        # subsequent scripts: cleaning impsegcop, impseg, and finally joins to get our
-        # final data set.
-
-#----------------TAXLOTS--------------------------
-# *Assumes we've already read all of our data sets from the gdbs*
-
 
 # Reformat SALEDATE column (save as date type so that we can
 # do math on it)
@@ -48,7 +40,7 @@ multi_foot <- ftprints_pruned %>%
   lwgeom::st_make_valid() %>%
   group_by(STATE_ID) %>%
   mutate(n = n()) %>%
-  filter(n > 1)
+  filter(n > 2)
 
 ids <- multi_foot %>% pull(STATE_ID)
 
@@ -102,7 +94,7 @@ isUnique <- function(id, var){ # both inputs are strings
   ifelse(length(t) == 1, T, F)
 }
 
-#sameuse <- sapply(ids[1:3,], isUnique, var = "BLDG_USE")
+sameuse <- sapply(ids[1:3,], isUnique, var = "BLDG_USE")
 
 # --------------------------------------------------------------------
 

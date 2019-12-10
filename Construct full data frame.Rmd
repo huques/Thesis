@@ -254,7 +254,8 @@ PropertyID = 1, Plumbing_Code = "FB1"
 PropertyID = 1, Plumbing_Code = "HB2"  -->  PropertyID = 1, bath = "FB1|HB2"
 ```{r}
 baths <- bath %>% group_by(PropertyID) %>%
-  summarise(bath = paste0(unique(Plumbing_Code), collapse = "|"))
+  summarise(bath = paste0(Plumbing_Code, 
+                          collapse = "|"))
 
 fires <- fire %>% group_by(PropertyID) %>%
   summarise(fireplace = paste0(unique(Fire_Place_Code), collapse = "|"))
