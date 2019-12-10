@@ -99,7 +99,7 @@ The above layers were read using the `sf` package in R.
 # Content Description
 
 ### Variable list
-See linked excel file for variable and value dictionaries.
+See [dictionary.md](https://github.com/huques/Thesis/blob/master/dictionary.md "Data Dictionary") for all variable and value dictionaries associated with this project.
 
 ***
 
