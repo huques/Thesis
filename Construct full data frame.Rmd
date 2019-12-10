@@ -319,3 +319,23 @@ identified_const <- st_join(con_pt, slim_tax)
 ```
 
 
+### Distance to CBD 
+Using City Hall as the CBD. Right now using Euclidean distance, might wanna go back and use street networks as well to compare. 
+```{r}
+#creating city hall coordinate data frame
+cityhall_coord <- data.frame(
+                 place=c("City Hall"),
+                 longitude=(-122.678904),
+                 latitude=(45.514858))
+
+#creating list of distance measures
+cityhall <- st_as_sf(cityhall_coord, coords = c("longitude", "latitude")) %>%
+  st_set_crs(4326) %>%
+  st_transform(2913)
+
+#adding column to taxlots_pruned
+taxlots_pruned <- taxlots_pruned %>%
+  mutate(dist_cityhall = as.numeric(st_distance(taxlots_pruned, cityhall, which = "Euclidean")))
+
+```
+

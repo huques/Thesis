@@ -28,7 +28,7 @@ layers2
 layers2[["name"]]
 
 
-constraints <- st_read(gdb, layer = "bli_development_capacity")
+capacity <- st_read(gdb, layer = "bli_development_capacity")
 gisimpcop <- st_read(gdb, layer = "CoP_GISImprovement")
 impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
 gispropcop <- st_read(gdb, layer = "CoP_GISProperty")
@@ -53,7 +53,7 @@ propcodelu <- st_read(gdb, layer = "Property_Code_Lookup")
 plumblu <- st_read(gdb, layer = "Plumbing_Lookup")
 
 taxlots <- st_read(gdb2, layer = "taxlots_20191010") 
-bliconstraints <- st_read(gdb2, layer = "bli_constraints_all")
+bli_constraints <- st_read(gdb2, layer = "bli_constraints_all")
 footprints <- st_read(gdb2, layer = "building_footprints_20191010")
 ```
 COLUMN NAMES
