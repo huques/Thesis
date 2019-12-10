@@ -23,7 +23,7 @@ StateID
 - First data grab 10/10/2019 -> DATA/data1.gdb
 - Second data grab 10/29/2019 -> DATA/data2.gdb
 - Third data grab 11/21/2019 -> DATA/data-20191112.gdb
-- Fourth data grab
+- Fourth data grab 11/22/2019 -> DATA/tree_canopy.gdb
 
 ### Method:
 - Shapefile generation:
@@ -44,13 +44,51 @@ Each of these databases are saved in a directory called "DATA" on each of our ma
 
 #### data_20191112.gdb (retrieved via email on 11/21/2019)
 - bli_constraints = "bli_constraints_all"
-  - Description: updated constraints layer for accuracy. Contains all 27 of our constraints
+  - Description: updated constraints layer for accuracy. Contains all 27 of our constraints, but missing taxlot identifiers.
 - nbhd = "neighborhoods_no_overlap"
-  - Description: 
+  - Description: layer of 99 non-overlapping Portland neighborhoods whose levels include: 
+
+| -- | -- | -- |
+|--------|:-------|:------|
+|  LINNTON | FOREST PARK | CATHEDRAL PARK|  
+|  FOREST PARK | UNIVERSITY PARK | PIEDMONT|  
+|  CATHEDRAL PARK | PIEDMONT | ARBOR LODGE|  
+|  UNIVERSITY PARK | CULLY ASSOCIATION OF NEIGHBORS | PARKROSE|  
+|  MC UNCLAIMED #14 | OVERLOOK | HUMBOLDT|  
+|  PIEDMONT | PARKROSE | WILKES COMMUNITY GROUP|  
+|  WOODLAWN | ARGAY TERRACE | ALAMEDA|  
+|  CULLY ASSOCIATION OF NEIGHBORS | KING | ROSEWAY|  
+|  ARBOR LODGE | WILKES COMMUNITY GROUP | IRVINGTON COMMUNITY ASSOCIATION|  
+|  OVERLOOK | SABIN COMMUNITY ASSOCIATION | NORTHWEST DISTRICT ASSOCIATION|  
+|  CONCORDIA | BOISE | PEARL DISTRICT|  
+|  PARKROSE | ROSEWAY | SULLIVAN'S GULCH|  
+|  SUMNER ASSOCIATION OF NEIGHBORS | ELIOT | KERNS|  
+|  ARGAY TERRACE | ROSE CITY PARK | HAZELWOOD|  
+|  HUMBOLDT | NORTHWEST DISTRICT ASSOCIATION | GOOSE HOLLOW FOOTHILLS LEAGUE|  
+|  KING | GRANT PARK | PORTLAND DOWNTOWN|  
+|  VERNON | HOLLYWOOD | SOUTHWEST HILLS RESIDENTIAL LEAGUE|  
+|  WILKES COMMUNITY GROUP | SULLIVAN'S GULCH | CENTENNIAL COMMUNITY ASSOCIATION|  
+|  BEAUMONT-WILSHIRE | LAURELHURST | SOUTH PORTLAND|  
+|  SABIN COMMUNITY ASSOCIATION | HILLSIDE | POWELLHURST-GILBERT|  
+|  ALAMEDA | HAZELWOOD | CRESTON-KENILWORTH|  
+|  BOISE | ARLINGTON HEIGHTS | LENTS|  
+|  NORTHWEST HEIGHTS | GLENFAIR | MT. SCOTT-ARLETA|  
+|  ROSEWAY | PORTLAND DOWNTOWN | WOODSTOCK|  
+|  MADISON SOUTH | MT. TABOR | MULTNOMAH|  
+|  ELIOT | SUNNYSIDE | ARDENWALD-JOHNSON CREEK|  
+|  IRVINGTON COMMUNITY ASSOCIATION | CENTENNIAL COMMUNITY ASSOCIATION | COLLINS VIEW|  
+|  ROSE CITY PARK | RICHMOND | FAR SOUTHWEST|  
+|  PARKROSE HEIGHTS ASSOCIATION OF NEIGHBORS | HOMESTEAD | LLOYD DISTRICT COMMUNITY ASSOCIATION|  
+|  NORTHWEST DISTRICT ASSOCIATION | POWELLHURST-GILBERT | CRESTWOOD|  
+|  RUSSELL | BRIDLEMILE | ST. JOHNS|  
+|  GRANT PARK | HILLSDALE | BRIDGETON|  
+|  PEARL DISTRICT | LENTS | PORTSMOUTH  |  
+
   
 #### tree_canopy.gdb
 - canopy = "canopy_class_2014_metro"
-- "bli_capacity_v2"
+- bli_capacity2 = "bli_capacity_v2"
+  - Description: includes the updated constraint geographies linked to taxlot numbers. So we'll use this data frame to collapse and join our constraints to the taxlots. 
 
   
 
@@ -91,7 +129,7 @@ footprints %<>%
             bldguse = BLDG_USE[1]) 
 ```
 2. Improvement segments (CoP):
-These contain our garage, pool, shed, porch, deck dummy variables. Initially the data frame was transformed as in the example below:
+These contain our garage, pool, shed, porch, deck, etc. square footage variables to possibly(?) be transformed into dummy variables. Currently they're in the full data set as square footages. The data frame was transformed as in the example below:
 
 | PropID | SegmentType | SegmentSqFt  |
 |--------|-------:|:------:|
@@ -159,7 +197,7 @@ impseg <- left_join(impseg, fires, by = "PropertyID")
 ```
 4. Distance to Portland City Hall, a proxy for distance to Central Business District (CBD)
 
-This variable measures the Euclidean distance in feet of each property to Portland city hall. We generated this variable using the `st_distance()` function within the `sf` R package. The code is reproduced below:
+This `dist_cityhall` variable measures the Euclidean distance in feet of each property to Portland city hall. We generated this variable using the `st_distance()` function within the `sf` R package. The code is reproduced below:
 
 ```{r}
 # grab lat long from google maps
