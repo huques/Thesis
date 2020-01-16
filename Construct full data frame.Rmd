@@ -25,7 +25,7 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 gdb <- "./DATA/data2.gdb"
 
 
-capacity <- st_read(gdb, layer = "bli_development_capacity")
+capacity0 <- st_read(gdb, layer = "bli_development_capacity")
 #gisimpcop <- st_read(gdb, layer = "CoP_GISImprovement")
 impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
 #gispropcop <- st_read(gdb, layer = "CoP_GISProperty")
@@ -52,7 +52,7 @@ gdb2 <- "./DATA/data1.gdb"
 
 taxlots <- st_read(gdb2, "taxlots_20191010")
 footprints <- st_read(gdb2, "building_footprints_20191010")
-
+st_layers(gdb2)
 
 #----------------------
 # GDB sent 11/21
@@ -62,6 +62,10 @@ st_layers(gdb3)
 bli_constraints <- st_read(gdb3, "bli_constraints_all")
 nbhd <- st_read(gdb3, "neighborhoods_no_overlap")
 
+gdb4 <- "./DATA/tree_canopy.gdb"
+st_layers(gdb4)
+
+bli_constraints_v2 <- st_read(gdb4, "bli_constraints_v2_pts_run4")
 ```
 
 ### Take sample of taxlots
@@ -118,8 +122,8 @@ dim(multi_foot) # they do not
 # Make collapsed footprints dataset called `allfeet`
 allfeet <- ftprints_pruned %>% 
   lwgeom::st_make_valid() %>%
-  group_by(STATE_ID) %>%
-  summarise(totalsqft = sum(BLDG_SQFT, na.rm = T),
+  dplyr::group_by(STATE_ID) %>%
+  dplyr::summarise(totalsqft = sum(BLDG_SQFT, na.rm = T),
             yearbuilt = mean(YEAR_BUILT, na.rm = T),
             avgheight = mean(AVG_HEIGHT, na.rm = T),
             surfelev = mean(SURF_ELEV, na.rm = T),
@@ -127,7 +131,8 @@ allfeet <- ftprints_pruned %>%
             maxheight = mean(MAX_HEIGHT, na.rm = T),
             volume = mean(VOLUME, na.rm = T),
             bldgtype = BLDG_TYPE[1],
-            bldguse = BLDG_USE[1]) 
+            bldguse = BLDG_USE[1]) %>%
+  st_drop_geometry()
 dim(allfeet)
 
 ```
@@ -271,10 +276,10 @@ all.is <- left_join(all.is, fires, by = "PropertyID")
 dim(taxlots_pruned)
 dim(allfeet)
 
-testjoint <- st_join(taxlots_pruned, allfeet, left = T)
-testjoint2 <- st_intersection(taxlots_pruned, allfeet)
+testjoint <- left_join(taxlots_pruned, allfeet, by = "STATE_ID")
+#testjoint2 <- st_intersection(taxlots_pruned, allfeet)
 dim(testjoint)
-dim(testjoint2)
+#dim(testjoint2)
 ```
 
 ### Left join impsegcop_wide to taxlots
@@ -283,25 +288,92 @@ impsegcop_wide$PROPERTYID <- impsegcop_wide$PropID # rename variable to join
 # by same id
 m <- left_join(taxlots_pruned, impsegcop_wide, 
                by = "PROPERTYID")
-m2 <- left_join(testjoint2, impsegcop_wide, 
-                by = "PROPERTYID")       
+m2 <- left_join(testjoint, impsegcop_wide, 
+                by = "PROPERTYID") 
+dim(m2)
+dim(taxlots_pruned)
 ```
 
 ### St_intersection school to taxlots
+
+One problem with an st_intersection is some lots are divided by the school catchment area boundaries, resulting in non-unique STATE_IDs in `testjoint3`. The st_intersection adds a second observation if it a tax lot is partially within catchment area 1 and partially within catchment area 2.
+
+This is the reason the number of observations rose after the intersection. 
+
 ```{r}
+# Naive st_intersection 
 testjoint3 <- st_intersection(m2, school)
+
+# Save multiple STATE_ID obs in `schzone`
+schzone <- testjoint3 %>%
+  group_by(STATE_ID) %>%
+  mutate(n = n()) %>%
+  filter(n > 1)
+
+# We can see that adding the number of unique stateIDs that are observed more than once
+# to the old dimensions is equal to the number of rows in testjoint3.
+nrow(m2) + length(unique(schzone$STATE_ID)) == nrow(testjoint3)
+
+# Fix: choose a catchment area for multiple STATE_ID lots depicted below. 
+schzone %>%
+  arrange(STATE_ID) %>%
+  select(contains("SCH"), Shape_Area, Shape_Area.1) %>%
+  st_drop_geometry() %>%
+  head() %>%
+  kable() %>% 
+  kable_styling(full_width = F)
+
+
+# Choose based on percentage of lot within that catchment area
+schzone$area.school <- st_area(st_geometry(schzone))
+testjoint3$area.school <- st_area(st_geometry(testjoint3))
+
+schzone %<>%
+  group_by(STATE_ID) %>%
+  mutate(max = max(area.school)) 
+
+schzone.big <- schzone %>% # add containing containing max area by STATE_ID
+  filter(as.numeric(max) == as.numeric(area.school)) 
+
+schzone.small <- schzone %>%
+  filter(as.numeric(max) != as.numeric(area.school)) 
+
+schzone.big$STATE_ID == schzone.small$STATE_ID # this vector should all be true
+
+# Use st_combine to meld the broken boundaries from schzone.small and schzone.big geometry sets.
+# note: I did not use st_union(st_geometry(schzone.small), st_geometry(schzone.big)) because
+# st_union() takes the cartesian union of both giving a much larger feature set than neccessary, 
+# we only want the diagonals
+for(r in 1:nrow(schzone.big)){
+  st_geometry(schzone.big[r,]) <- st_combine(c(st_geometry(schzone.big)[r], 
+               st_geometry(schzone.small)[r]))
+}
+
+# Now, combine the fixed geometries and catchment areas with the single-observation
+# subset of `testjoint3`
+single.school <- testjoint3 %>%
+  group_by(STATE_ID) %>%
+  mutate(n = n(),
+         max = NA) %>%
+  filter(n == 1) # This is the right number of rows, 34426
+
+# Row number check
+nrow(schzone.big) + nrow(single.school) == nrow(taxlots_pruned)
+
+testjoint3 <- rbind(schzone.big, single.school)
 ```
+
 
 ### Left join impseg to taxlots
 ```{r}
 all.is$PROPERTYID <- all.is$PropertyID
 testjoint4 <- left_join(testjoint3, all.is, by = "PROPERTYID")
-glimpse(testjoint4)
+dim(testjoint4)
 ```
 
 
-### Constraints to taxlots
-Note that constraints are separated by taxlot but they are not identified by STATEID or PROPERTYID. We dentify them using a spatial join with taxlots. 
+### **NOT WORKING PROPERLY: Constraints to taxlots
+Note that constraints are separated by taxlot but they are not identified by STATEID or PROPERTYID. We identify them using a spatial join with taxlots. 
 
 ```{r}
 dim(testjoint4)
@@ -322,12 +394,13 @@ identified_const <- st_join(con_pt, slim_tax)
 
 ### Distance to CBD 
 Using City Hall as the CBD. Right now using Euclidean distance, might wanna go back and use street networks as well to compare. 
+
 ```{r}
 #creating city hall coordinate data frame
 cityhall_coord <- data.frame(
-                 place=c("City Hall"),
-                 longitude=(-122.678904),
-                 latitude=(45.514858))
+                 place = c("City Hall"),
+                 longitude = (-122.678904),
+                 latitude = (45.514858))
 
 #creating list of distance measures
 cityhall <- st_as_sf(cityhall_coord, coords = c("longitude", "latitude")) %>%
@@ -340,3 +413,10 @@ taxlots_pruned <- taxlots_pruned %>%
 
 ```
 
+
+* * *
+## Write to shapefile
+```{R}
+library(sf)
+st_write(taxlots, "DATA/thesis_data1-11.shp")
+```
