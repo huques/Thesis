@@ -27,3 +27,5 @@ rsconnect/
 # User-added files/dirs
 DATA/
 .DS_Store
+# ignore the ignore
+.gitignore
