@@ -1,0 +1,284 @@
+---
+title: "Constraints cleaning"
+output: pdf_document
+---
+
+## Constraints Cleaning
+
+We have three different versions of the constraints, the most recent being "bli_constraints_v2" located within gdb4 = "tree_canopy.gdb". This document serves to connect these constraints by STATE_ID to the taxlots data frame. My goal is to include each constraint as a column for each property in the analysis.
+
+The constraints are not 1:1 with STATE_ID, that is STATE_ID is not a unique identifier within the "bli_capacity_v2" data frame. Therefore, part of this RMarkdown will collapse the constraints by STATE_ID.
+
+### Packages
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(magrittr)
+library(sf)
+library(mapview)
+library(kableExtra)
+```
+
+### Load capacity layers the geodatabase
+
+```{r }
+# Note: names are taken from the "Construct full data frame.Rmd"
+gdb4 <- "./DATA/tree_canopy.gdb"
+capacity.full <- st_read(gdb4, layer = "bli_capacity_v2")
+capacity.full %<>%
+  arrange(STATE_ID)
+```
+
+### Calculate an upper bound on number of properties within each constraint
+
+Since the analysis focuses primarily on the 27 constraints given in the sf data frame `capacity.full`, the upper bound on the number of observations within each constraint can give us some intuition of the uncertainty of our regression coefficients before regressions are actually run.    
+
+#### Define helper functions
+1) nonZeros. This function checks if there are any constraints for which the percentage of lot is different. For instance for row 1, conAirHgt = .724, conNoise = .724, etc, Assumes that this function is fed a row of a data frame with columns STATE_ID and constraints.
+
+2) isnt.na. Wraps !is.na in a function.
+
+```{r}
+nonZeros <- function(x){ # x is a row of df
+  ind <- which(x > 0) # check which columns the row has value larger than zero
+  ind <- dplyr::setdiff(ind, 1) # remove index 1, STATE_ID
+  ind <- as.numeric(ind) 
+  if(length(ind) == 0){ # if there are none, we return 0
+    0
+  }
+  else{ # count number of times that the first value in the row is not equal to the subsequent values
+    sum(rep(x[ind[1]], length(ind)) != x[ind])
+  } 
+}
+
+isnt.na <- function(x){!is.na(x)}
+```
+
+
+#### Use Tidyverse to collapse 
+- Uncollapsed df dimensions = 32498 x 146
+
+- Collapsed df dimensions = 24344 x 28.
+
+In the collapse we keep only the constraints and STATE_ID columns, discarding over 120 other columns given in `capacity.full`.
+```{r}
+# Collapse full capacity data frame
+cap.full.col <- capacity.full %>%
+  st_drop_geometry() %>%
+  mutate_at(vars(conECSI:conFld100), isnt.na) %>%
+  group_by(STATE_ID) %>%
+  mutate_at(vars(conECSI:conFld100), 
+            funs(ifelse(., 1, 0))) %>%
+  summarise_at(vars(conECSI:conFld100), sum) %>%
+  mutate_at(vars(conECSI:conFld100), 
+            funs(ifelse(. > 1, 1, .)))
+
+dim(capacity.full)
+dim(cap.full.col) 
+
+# define upper bound:
+upper.bd <- cap.full.col %>%
+  select(-STATE_ID) %>%
+  colSums()
+
+# Print table
+upper.bd %>%
+  sort() %>%
+  kable() %>% 
+  kable_styling(full_width = F,
+                            position = "center")
+```
+
+As we can see, `conWetland`, `conView`, `conHeliprt`, and `conNatAm` have the fewest observations.
+
+## Calculate number of properties within each constraint within 5-year time frame
+
+Note that the data frame `testjoint5` was constructed in the "Construct Full Data Frame.rmd". It includes building footprint data, bathrooms, fireplaces, additional units, school catchment areas, distance to CBD, and neighborhood fixed effects.
+
+```{r}
+# grab the stateids in testjoint5
+ids <- unique(testjoint5$STATE_ID)
+
+cap.trim.col <- cap.full.col %>%
+  filter(STATE_ID %in% ids) 
+
+# Print table
+cap.trim.col %>%
+  select(-STATE_ID) %>%
+  colSums() %>%
+  sort() %>%
+  kable() %>% 
+  kable_styling(full_width = F,
+                            position = "center")
+
+dim(cap.trim.col)
+```
+
+
+### Join binary constraints to rest of data frame
+
+```{R}
+testjoint6 <- left_join(testjoint5, cap.trim.col, by = "STATE_ID")
+dim(testjoint6)
+```
+
+We can add `conPrvCom`, `conFldway`, and `conInst`, `conPubOwn`, `conHistLdm` to our list of constraints that may not have enough supporting data. We could remedy this by extending the 5-year timeframe.  
+
+
+### **NOT YET WORKING: Percentage of lot within constraint
+
+Main question: how are the geometries in the capacity data frame from Nick divided? Is it possible to calculate percentage of lot within the constraint using these geometries? Goal: find reproducible example of this...
+
+EXAMPLE:
+
+In the example below with STATE_ID = 12E26BA00400, the constraints are identified within only one parcel of the split taxlot, so it is not clear which variables are cutting the geometries. 
+```{R}
+mult.const.ids <- capacity.full %>%
+  arrange(STATE_ID) %>%
+  group_by(STATE_ID) %>%
+  mutate(n = n()) %>%
+  filter(n > 1) %>%
+  pull(STATE_ID)
+mult.const.ids <- unique(mult.const.ids)
+
+mult.const.ids <- mult.const.ids[mult.const.ids %in% unique(testjoint5$STATE_ID)]
+
+ex1 <- capacity.full %>%
+  filter(STATE_ID == mult.const.ids[1])
+ex2 <- testjoint5 %>% filter(STATE_ID == mult.const.ids[1])
+
+mapview(ex1)
+
+# Figure below shows the split geometries in capacities do correspond to the same geometry in taxlots:
+plot(st_geometry(ex2), col = "red",
+     main = paste0("Plot of state ID: ", mult.const.ids[1])) # comes from testjoint5 (taxlots layer originally)
+plot(st_geometry(ex1), add = T, alpha = .5) # comes from bli_capacity_v2
+```
+
+The code below is testing, there still is not quite a reliable percent of lot within constraint because it appears that the constraint geometries are split by some metric other than binary within/not within constraint. 
+
+To calculate percentages, I bring in the `Shape_Area` attribute from the original taxlots data frame, `testjoint5`.
+
+```{R}
+test <- capacity.full %>%
+  mutate_at(vars(conECSI:conFld100), isnt.na) %>%
+  group_by(STATE_ID) %>%
+  mutate_at(vars(conECSI:conFld100), 
+          funs(ifelse(., Shape_Area / tlarea, 0))) %>%
+  select(STATE_ID, conECSI:conFld100)
+
+list <- vector("list", nrow(test))
+for(i in 1:nrow(test)){
+ list[i] <- firstNonZero(test[i,])
+}
+
+# Sum below is 0, indicating that there are no observations for which row i has percentages
+# that are different for different constraints (id = 1N3E400, conLUST = 0.05, conNoise = 0.75)
+# *this means that the constraints are split into geometries by a metric other than the constraints*
+sum(unlist(list))
+```
+
+
+# Using bli_constraints_v2_run4 to calculate percent of lot in constraint
+
+```{R}
+# The bli_constraints_v2 is currently set with geometry as points, we want the polygons
+st_geometry(bli_constraints_v2) <- st_geometry(bli_constraints)
+
+constraints_v2 <- bli_constraints_v2 %>%
+  filter(taxlot_STATE_ID %in% unique(testjoint5$STATE_ID))
+dim(constraints_v2)
+dim(testjoint5)
+
+length(unique(constraints_v2$taxlot_STATE_ID))
+length(unique(testjoint5$STATE_ID))
+
+# Below is a 4348 x 43 dimension df
+multi.const <- constraints_v2 %>%
+  group_by(taxlot_STATE_ID) %>%
+  mutate(n = n()) %>%
+  filter(n > 1)
+
+unique(multi.const$n) # tax lots are sliced into at most 11 pieces
+
+const.ids <- multi.const %>% pull(taxlot_STATE_ID)
+const.ids <- as.character(unique(const.ids))
+
+ex <- multi.const %>%
+  filter(taxlot_STATE_ID == const.ids[251])
+
+ex2 <- testjoint5 %>%
+  filter(STATE_ID == const.ids[251])
+
+# plot to make sure that our geometries look the same so that we can calculate percent
+# of lot within constraint-- check went as expected. the geometries overlap.
+
+plot(st_geometry(ex), col = "red")
+plot(st_geometry(ex2), col = "green", add = T)
+```
+
+```{r}
+# Take the area of each observation's geometry (polygon)
+constraints_v2$conarea <- as.numeric(st_area(st_geometry(constraints_v2)))
+taxlot.areas <- taxlots_pruned %>%
+  rename(taxlot_STATE_ID = STATE_ID)
+taxlot.areas$tlarea <- as.numeric(st_area(st_geometry(taxlot.areas)))
+taxlot.areas %<>%
+  select(taxlot_STATE_ID, tlarea) %>%
+  st_drop_geometry()
+
+constraints_v2 <- left_join(constraints_v2, taxlot.areas, by = "taxlot_STATE_ID")
+
+# Collapse the constraints by taxlot_STATE_ID and calculate percent
+# of constraint within tax lot
+collapsed.constraints <- constraints_v2 %>%
+  mutate_at(vars(conECSI:conFld100), isnt.na) %>%
+  group_by(taxlot_STATE_ID) %>%
+  mutate(sum.conarea = sum(conarea)) %>%
+  mutate_at(vars(conECSI:conFld100), 
+            funs(ifelse(., conarea / sum.conarea, 0))) %>%
+  st_drop_geometry() %>%
+  summarise_at(vars(conECSI:conFld100), sum)
+  
+# Sanity check: no percent in lot constraint vars are greater than 1. Yay!
+collapsed.constraints %>%
+  dplyr::select(-taxlot_STATE_ID) %>%
+  dplyr::filter_all(any_vars(. > 1))
+```
+
+### PROBLEM: Mismatched constraints and taxlot geometry intersections
+
+Some STATE_IDs associated with a single geometry are really the combined geometries of two taxlots with differing STATE_IDs. For example, for taxlot associated with state id 1S2E19DA  6200, the constraints geometry encompasses both this state id and 1S2E19DA  6100--two different properties. 
+
+There are quite a few observations outside this one instance for which this is a problem (as shown in conmap + taxmap). Let's ask Nick if we can get the constraints in the format of schools or neighborhoods instead to keep consistent geometries.  This is only a problem if the light purple regions in the map below are included within the analysis sample. If some light purple properties are included in our full data frame, then the constraints layer only captures constraints on the dark purple properties, meaning the light purple won't be included in the regression as having a constraint, biasing our numbers. 
+
+```{r}
+# EXAMPLE 1
+map1 <- constraints_v2 %>% 
+  filter(taxlot_STATE_ID == "1S2E19DA  6200") %>% 
+  mapview(layer.name = "Constraint")
+map2 <- testjoint5 %>% filter(STATE_ID == "1S2E19DA  6200") %>% 
+  mapview(layer.name = "Taxlot")
+map1 + map2
+
+# State id above does not figure into constraints df separately, nor does it appear in our
+# taxlots pruned set. However, this id is within the original "taxlots" data frame. According to 
+# portlandmaps.com, it is owned by somebody else & is for all intents and purposes different from id
+# 6200.
+map3 <- constraints_v2 %>% 
+  filter(STATE_ID == "1S2E19DA  6100") %>% mapview()
+
+# Now, find all cases in which constraint area is larger than the taxlot area
+big.const <- constraints_v2 %>%
+  filter(conarea > tlarea) 
+ids <- big.const %>% pull(taxlot_STATE_ID)
+conmap <- big.const %>% mapview(layer.name = "Constraint Layer")
+
+big.taxlot <- taxlots_pruned %>%
+  filter(STATE_ID %in% ids)
+taxmap <- big.taxlot %>% mapview(layer.name = "Taxlot Layer")
+
+taxmap + conmap # big map showing all the problem properties
+```
+
+Note that within the above map (containing more than 15000 observations) some instances represent only slightly imperfect overlaps between taxlot and constraint geometries--that is the dark purple regions are good, representing complete combined taxlot and constraint data. But since the logical statement was just that the constraint area be larger than the taxlot area, we also turned these slighly imperfect overlaps, not perfectly isolating the major taxlot holes as shown in Example 1. So the observations highlighted in the map represent an upper bound on the number of observations affected.
