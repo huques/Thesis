@@ -16,6 +16,9 @@ zoningfeb2018 <- st_read("./DATA/Zoning_History/Zoning_2018_Feb_pdx.shp")
 mapview(zoningaug2014)
 dim(zoningaug2014)
 
+ˆ
+
+
 # Goal: capture zoning changes
 # 1) What do the columns in the zoning history shapefiles mean? i.e. which variable
 # will we use to keep track of the zone a taxlot is within? 
@@ -123,10 +126,12 @@ colnames(zoningaug2018)
 colnames(zoningaug2017)
 
 # Rename loaded shapefile & variable we're interested in
-
-joinZones <- function(shp, time){
+# `shp` refers to loaded sf object, `time` is a string of the date associated with the zoning file
+# and will help with the naming convention
+addZone <- function(shp, time){
   require("dplyr")
   require("sf")
+  require("magrittr")
   
   z <- shp #**** input can be fed here
   zone_name <- paste0("zone.", time)
@@ -145,7 +150,7 @@ joinZones <- function(shp, time){
   sum_area <- enquo(sum_area)
 
   # This intersection has repeated STATE_IDs due to taxlots that intersect with several zone geometries
-  intersect <- st_intersection(testjoint5, z) 
+  intersect <- st_intersection(taxlots_pruned, z) 
   intersect[area_name] <- as.numeric(st_area(st_geometry(intersect)))
 
     # Collapse test so STATE_ID is 1:1
@@ -164,33 +169,62 @@ joinZones <- function(shp, time){
 }
 
 # Call the function to join each zoning history & do a left_join
-df <- left_join(testjoint5, joinZones(zoningaug2016, "aug2016"), by = "STATE_ID")
-df <- left_join(df, joinZones(zoningfeb2014, "feb2014"), by = "STATE_ID")
-df <- left_join(df, joinZones(zoningaug2014, "aug2014"), by = "STATE_ID")
-df <- left_join(df, joinZones(zoningfeb2015, "feb2015"), by = "STATE_ID")
-df <- left_join(df, joinZones(zoningaug2015, "aug2015"), by = "STATE_ID")
-df <- left_join(df, joinZones(zoningfeb2016, "feb2016"), by = "STATE_ID")
-df <- left_join(df, joinZones(zoningfeb2018, "feb2018"), by = "STATE_ID")
-df <- left_join(df, joinZones(zoningaug2017, "aug2017"), by = "STATE_ID")
-df <- left_join(df, joinZones(zoningaug2018, "aug2018"), by = "STATE_ID")
+df <- left_join(taxlots_pruned, addZone(zoningaug2016, "8.2016"), by = "STATE_ID")
+df <- left_join(df, addZone(zoningfeb2014, "2.2014"), by = "STATE_ID")
+df <- left_join(df, addZone(zoningaug2014, "8.2014"), by = "STATE_ID")
+df <- left_join(df, addZone(zoningfeb2015, "2.2015"), by = "STATE_ID")
+df <- left_join(df, addZone(zoningaug2015, "8.2015"), by = "STATE_ID")
+df <- left_join(df, addZone(zoningfeb2016, "2.2016"), by = "STATE_ID")
+df <- left_join(df, addZone(zoningfeb2018, "2.2018"), by = "STATE_ID")
+df <- left_join(df, addZone(zoningaug2017, "8.2017"), by = "STATE_ID")
+df <- left_join(df, addZone(zoningaug2018, "8.2018"), by = "STATE_ID")
 # -----------------------------------------------
 # Generate zoning change dummies
 
 factorzones <- df %>%
-  dplyr::select(contains("zone")) %>%
-  dplyr::select_if(is.factor)
+  dplyr::select(contains("zone"), STATE_ID) %>%
+  dplyr::select(STATE_ID, zone.2.2014, zone.8.2014, zone.2.2015, zone.8.2015, zone.2.2016,
+                zone.8.2016, zone.8.2017, zone.2.2018, zone.8.2018) 
 
-# Check if any changes occur
+# Check if any changes occur (does not account for up/down zoning)
 isDifferent <- function(row){
-  zone1 <- factorzones[row, 2]
-  zone1 <- as.character(zone1[[1]])
-  
   r <- factorzones[row,] %>%
     st_drop_geometry()
-  r <- unlist(as.matrix(r))
+  r <- as.character(unlist(as.matrix(r)))
+  print(r)
+  rle <- rle(r)
+  output <- rep(F, length(r))
+  names(output) <- names(r)
+  output[1] <- r[1]
   
-  bool <- zone1 != r
-  sum(bool[-1])
+  for(i in rle$values[-c(1,2)]){
+    change <- min(which(r == i))
+    output[change] <- TRUE
+  }
+  output
 }
 
+list <- lapply(1:nrow(factorzones), isDifferent)
+# 4:45 - 4:48 
 
+
+# Get names of all the zone map times to create boolean change variables
+names <- colnames(factorzones)
+chg_names <- gsub("zone", "zonechg", names)
+chg_names <- dplyr::setdiff(chg_names, "Shape")
+
+df1 <- data.frame(matrix(unlist(list), nrow=length(list), byrow=T))
+colnames(df1) <- chg_names
+
+df1 <- df1 %>%
+  select(-STATE_ID) %>%
+  mutate_all(as.logical) 
+
+rsums <- df1 %>% rowSums()
+
+df1$STATE_ID <- factorzones$STATE_ID
+
+# Final zoning variables join
+x <- left_join(factorzones, df1, by = "STATE_ID")
+
+                   

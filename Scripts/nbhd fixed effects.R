@@ -2,79 +2,109 @@ library(sf)
 library(dplyr)
 library(mapview)
 
-# Bring in neighborhood fixed effects
-testjoint5 <- st_intersection(testjoint4, nbhd)
-dim(testjoint5)
+gdb3 <- "./DATA/data_20191112.gdb"
+nbhd <- st_read(gdb3, "neighborhoods_no_overlap")
 
-# Problem: there are 567 observations where STATE_ID is double counted.
-nbhd.overlap <- testjoint5 %>%
+# Bring in neighborhood fixed effects
+df <- st_intersection(taxlots_pruned, nbhd)
+
+# Problem: there are 567 observations where STATE_IDs are double counted.
+nbhd.overlap <- df %>%
   arrange(STATE_ID) %>%
   dplyr::group_by(STATE_ID) %>%
   dplyr::mutate(n = n()) %>%
-  dplyr::filter(n > 1)
+  dplyr::filter(n > 1 )
 
 # Calculate intersection areas. 
 # Notice that new geometries were generated from the st_intersection() function
-# used to create `testjoint5`. These geometries are the intersections between the 99 neighborhoods
-# and our 34628 taxlots. A STATE_ID appears in `testjoint5` multiple times when a single taxlot 
+# used to create `df`. These geometries are the intersections between the 99 neighborhoods
+# and our 34628 taxlots. A STATE_ID appears in `df` multiple times when a single taxlot 
 # intersects more than one neighborhood. 
-nbhd.overlap$area.nbhd <- st_area(st_geometry(nbhd.overlap))
 
 #------------------ FIX MULTI STATE_ID DOUBLE COUNT -----------------------
 
-# I determine which neighborhood to place a double-counted
-# taxlot by keeping the observation with the max of the intersected areas. 
+# I place  a double-counted taxlot in the neighborhood that intersects a plurality of 
+# its total area.
 
+# Add area variable
+nbhd.overlap$area.nbhd <- st_area(st_geometry(nbhd.overlap))
+
+# Groupby STATE_ID and add a variable that is the maximum of the double counted taxlots' areas
 nbhd.overlap %<>%
   group_by(STATE_ID) %>%
   mutate(max = max(area.nbhd)) 
 
-nbhd.big <- nbhd.overlap %>% # add containing containing max area by STATE_ID
+nbhd.big <- nbhd.overlap %>%
   filter(as.numeric(max) == as.numeric(area.nbhd)) 
 
+# DO NOT NEED TO DEFINE UNLESS WE NEED THE GEOMETRIES FOR SOME REASON
 nbhd.small <- nbhd.overlap %>%
   filter(as.numeric(max) != as.numeric(area.nbhd)) 
 # since nbhd.small has more rows than nbhd.big, we know that some taxlots
 # intersect more than 2 neighborhoods.
 
-nbhd.single <- testjoint5 %>%
+nbhd.single <- df %>%
   arrange(STATE_ID) %>%
   dplyr::group_by(STATE_ID) %>%
   dplyr::mutate(n = n()) %>%
   dplyr::filter(n == 1)
 
-
+#-----------------------------------------
+# NOT NECESSARY!
 # This loop combines the geometries from where the STATE_IDs had split & replaces partial geometries
 # in nbhd.big with complete geometries.
-for(r in 1:nrow(nbhd.big)){
-  id <- nbhd.big[r,]$STATE_ID
-  tinydf <- nbhd.small %>%
-    filter(STATE_ID == id)
-  st_geometry(nbhd.big[r,]) <- st_combine(st_geometry(tinydf))
-}
+#for(r in 1:nrow(nbhd.big)){
+#  id <- nbhd.big[r,]$STATE_ID
+#  tinydf <- nbhd.small %>%
+#    filter(STATE_ID == id)
+#  st_geometry(nbhd.big[r,]) <- st_combine(st_geometry(tinydf))
+#}
 #-----------------------------------------
-nbhd.single$area.nbhd <- NA # define this column on the observations 
-# where it was not necessary to correct the geometries. This ensures rbind() works properly.
+
+nbhd.single$area.nbhd <- NA # define these columns to ensure rbind() works properly.
 nbhd.single$max <- NA
+df <- rbind(nbhd.single, nbhd.big) # correct  number of dimensions!
 
-testjoint5 <- rbind(nbhd.single, nbhd.big) # correct  number of dimensions!
+dim(df) # note that the dimension of the newly created df is smaller than the taxlots, meaning there 
+# are some properties in which there was no corresponding neighborhood (this introduces selection
+# bias). 
 
-dim(testjoint5) # note that the dimension of tj5 is smaller than tj4, meaning there are some
-# properties in which there was no corresponding neighborhood. Therefore these are removed from the 
-# sample, which is okay.
+# RESOLVE SELECTION BIAS:
+# list of STATE_IDS that were dropped
+diff <- setdiff(unique(taxlots_pruned$STATE_ID), unique(df$STATE_ID))
 
-dim(testjoint4)
+# Rename ambiguous nbhd geometry columns 
+df %<>%
+  rename(Shape_Leng.nbhd = Shape_Leng,
+         Shape_Length.nbhd = Shape_Length.1,
+         Shape_Area.nbhd = Shape_Area.1,
+         area.nbhd.insx = area.nbhd,
+         NBHD_NAME = NAME)
 
-#----------- RENAME GEOMETRY FEATURES ------------------------------
-colnames(testjoint5)
+# grab the lots for which no nbhd was recorded (those that went missing in the intersection)
+# initialize vars that were added in the intersection (so rbind can join properly)
+removed_lots <- taxlots_pruned %>%
+  filter(STATE_ID %in% diff) %>%
+  mutate(Shape_Leng.nbhd = NA,
+         Shape_Length.nbhd = NA,
+         Shape_Area.nbhd = NA,
+         area.nbhd.insx = NA, 
+         NBHD_NAME = NA,
+         MapLabel = NA,
+         COMMPLAN = NA,
+         SHARED = NA,
+         COALIT = NA,
+         HORZ_VERT = NA,
+         NBRNUM = NA,
+         AUDIT_NBRH = NA,
+         OBJECTID = NA,
+         n = NA,
+         max = NA)
+         
+# binding retains the lots that had dropped out!
+df <- rbind(df, removed_lots)
 
-testjoint5 %<>%
-  rename(Shape_Length.school = Shape_Length.1,
-         Shape_Leng.school = Shape_Leng,
-         Shape_Area.school = Shape_Area.1,
-         school.insx.area = area.school,
-         Shape_Leng.nbhd = Shape_Leng.1,
-         Shape_Length.nbhd = Shape_Length.2,
-         Shape_Area.nbhd = Shape_Area.2,
-         nbhd.insx.area = area.nbhd)
+
+
+
 

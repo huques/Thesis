@@ -1,6 +1,7 @@
 library(stringr)
 
 # ------------------- Recode bathrooms ------------------------
+# Assumes that the bathrooms have been joined and are in the following ex. form: "HB1'FB1|HB2"
 bths <- unique(testjoint5$bath)
 
 # Initialize columns: f.baths = total full baths, h.baths = total half baths
@@ -27,11 +28,11 @@ testjoint5$h.baths <- bath_matrix[2,]
 
 
 # ------------------- Recode fireplaces ------------------------
-# I chose to treat all the fireplaces as the same and simply count the number of fireplaces/hearth
+# I chose to treat all the fireplaces as the same and count the number of fireplaces/hearth
 # That is fireplaces coded as MD2 = MODULAR 2 and BK1 = BRICK 1.
-# Did this because I don't know how different these fireplaces truly are base upon the "firelu" table
-# alone. It seems reasonable that the kind of fireplace does not matter too much. We can come back 
-# to this decision later. 
+# Did this because it seems reasonable to think that differing styles/types of fireplaces
+# won't have a measurable effect on property values. Can come back 
+# to this decision, & check out the firelu table. 
 
 
 extractHearth <- function(string){

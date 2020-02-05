@@ -1,0 +1,87 @@
+---
+title: "Constraints"
+output: html_document
+---
+
+### Load packages
+
+```{r setup, include=T}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+library(sf)
+library(magrittr)
+library(ggplot2)
+library(dplyr)
+library(mapview)
+```
+
+### Load Geodatabase and Shapefiles
+
+```{R message=FALSE, warning=FALSE}
+# Load shapefile and geodatabase
+gdb4 <- "tree_canopy.gdb"
+constraints_v2 <- st_read("/Users/ryankobler/Desktop/thesis/Thesis/DATA/tree_canopy.gdb", 
+                          layer = "bli_constraints_v2_pts_run4")
+
+bli_constraints <- st_read("/Users/ryankobler/Desktop/thesis/Thesis/DATA/data_20191112.gdb", 
+                           layer = "bli_constraints_all")
+
+# Change geometry from centroids to initial squares
+st_geometry(constraints_v2) <- st_geometry(bli_constraints)
+
+
+# Load taxlots
+taxlots <- st_read("/Users/ryankobler/Desktop/thesis/Thesis/DATA/data1.gdb",
+                   layer = "taxlots_20191010")
+
+# Prune taxlots
+begin <- as.Date("2015-01-01")
+end <- as.Date("2019-01-01")
+
+# Reformat SALEDATE column (save as date type so that we can
+# do math on it)
+taxlots$saledate <- as.Date(as.character(taxlots$SALEDATE), "%m/%d/%Y")
+
+# Take time interval of taxlots we're interested in (5-years)
+taxlots_pruned <- taxlots %>%
+  filter(saledate > begin & saledate < end)
+```
+
+### PROBLEM: Mismatched constraints and taxlot geometry intersections
+
+Some STATE_IDs associated with a single geometry are really the combined geometries of two taxlots with differing STATE_IDs. For example, for taxlot associated with state id 1S2E19DA  6200, the constraints geometry encompasses both this state id and 1S2E19DA  6100--two different properties. 
+
+There are quite a few observations outside this one instance for which this is a problem (as shown in conmap + taxmap). This is only a problem if the light purple regions in the map below are included within the analysis sample. If some light purple properties are included in our full data frame, then the constraints layer only captures constraints on the dark purple properties, meaning the light purple won't be included in the regression as having a constraint, biasing our numbers. 
+
+```{r}
+# EXAMPLE 1
+map1 <- constraints_v2 %>% 
+  filter(taxlot_STATE_ID == "1S2E19DA  6200") %>% 
+  mapview(layer.name = "Constraints Layer")
+map2 <- taxlots_pruned %>% filter(STATE_ID == "1S2E19DA  6200") %>% 
+  mapview(layer.name = "Taxlots Layer")
+map3 <- taxlots %>% filter(STATE_ID == "1S2E19DA  6100") %>% 
+  mapview(layer.name = "Hidden Taxlot")
+
+map1 + map2 + map3
+
+# State id above does not figure into constraints df separately, nor does it appear in our
+# taxlots pruned set. However, this id is within the original "taxlots" data frame. According to 
+# portlandmaps.com, it is owned by somebody else & is for all intents and purposes different from id
+# 6200.
+#map3 <- constraints_v2 %>% 
+#  filter(STATE_ID == "1S2E19DA  6100") %>% mapview()
+
+# Now, find all cases in which constraint area is larger than the taxlot area
+#big.const <- constraints_v2 %>%
+#  filter(conarea > tlarea) 
+#ids <- big.const %>% pull(taxlot_STATE_ID)
+#conmap <- big.const %>% mapview(layer.name = "Constraint Layer")
+
+#big.taxlot <- taxlots_pruned %>%
+#  filter(STATE_ID %in% ids)
+#taxmap <- big.taxlot %>% mapview(layer.name = "Taxlot Layer")
+
+#taxmap + conmap # big map showing all the problem properties
+```
+
+Note that within the above map (containing more than 15000 observations) some instances represent only slightly imperfect overlaps between taxlot and constraint geometries--that is the dark purple regions are good, representing complete combined taxlot and constraint data. But since the logical statement was just that the constraint area be larger than the taxlot area, we also turned these slighly imperfect overlaps, not perfectly isolating the major taxlot holes as shown in Example 1. So the observations highlighted in the map are an upper bound on the number of observations affected.
