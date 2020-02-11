@@ -41,7 +41,7 @@ df$pct_canopy_cov <- NA
 can_cov_var <- canopy2 %>%
   select(STATE_ID, pct_canopy_cov)
 
-df <- left_join(df, can_cov_var, by = "STATE_ID")
+df <- left_join(taxlots_pruned, can_cov_var, by = "STATE_ID")
 
 
 
