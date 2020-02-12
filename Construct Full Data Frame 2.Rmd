@@ -29,6 +29,7 @@ gdb <- "./DATA/data2.gdb"
 
 capacity <- st_read(gdb, layer = "bli_development_capacity")
 impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
+gisimpcop <- st_read(gdb, layer = "CoP_GISImprovement")
 impseg <- st_read(gdb, layer = "imp_segments")
 school <- st_read(gdb, layer = "school_attendance_areas")
 
@@ -588,7 +589,7 @@ Not specified based on number of ADU's on a property.
 
 ```{r}
 # column (267352 obs) with unique PropID and ADU dummy
-ADU <- impsegcop %>%
+ADU <- gisimpcop %>%
   select(ImpType, PropID) %>%
   count(PropID) %>%
   mutate(ADUdummy = ifelse(n == 1, "0", "1")) %>%

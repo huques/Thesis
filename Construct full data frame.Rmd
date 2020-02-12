@@ -26,7 +26,7 @@ gdb <- "./DATA/data2.gdb"
 
 
 capacity0 <- st_read(gdb, layer = "bli_development_capacity")
-#gisimpcop <- st_read(gdb, layer = "CoP_GISImprovement")
+gisimpcop <- st_read(gdb, layer = "CoP_GISImprovement")
 impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
 #gispropcop <- st_read(gdb, layer = "CoP_GISProperty")
 #allpropcop <- st_read(gdb, layer = "CoP_AllProperties")
