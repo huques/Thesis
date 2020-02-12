@@ -257,6 +257,7 @@ vacant_join_buffy <- st_join(buffy, vacancy_pruned, left = TRUE) # returns all b
 
 # calculates percent vacant houses in buffer
 vacant_var <- vacant_join_buffy %>%
+  st_drop_geometry() %>%
   arrange(STATE_ID.x) %>%
   group_by(STATE_ID.x) %>%
   rename(STATE_ID = STATE_ID.x) %>%
@@ -264,8 +265,7 @@ vacant_var <- vacant_join_buffy %>%
   mutate(VACANT = recode(VACANT, 
                        "1" = 1,
                        "0" = 0)) %>%
-  summarize(percent_vacant = sum(VACANT)/n[1]) %>%
-  st_drop_geometry()
+  summarize(percent_vacant = sum(VACANT)/n[1])
 
 # join to dataframe 
 fugly <- left_join(fugly, vacant_var, by = "STATE_ID")
@@ -444,7 +444,7 @@ ftprints_pruned %<>%
   st_drop_geometry()
 
 # Left join ftprints_pruned to fugly
-fugly <- left_join(taxlots_pruned, ftprints_pruned, 
+fugly <- left_join(fugly, ftprints_pruned, 
                by = "STATE_ID")
 
 #-------------------------------------------------------------------------------
