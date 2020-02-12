@@ -3,14 +3,13 @@ library(dplyr)
 library(sf)
 library(stringr)
 library(data.table)
-library(stringr)
 
 # load data
 gdb <- "DATA/data2.gdb"
-gisimpcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
+impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
 
 # column (267352 obs) with unique PropID and ADU dummy
-ADU <- gisimpcop %>%
+ADU <- impsegcop %>%
   select(ImpType, PropID) %>%
   count(PropID) %>%
   mutate(ADUdummy = ifelse(n == 1, "0", "1")) %>%
@@ -20,7 +19,7 @@ ADU <- ADU[-c(1),]
 
 ------------------------------------------------------------------------
 # filter houses with ADU's
-getADU <- gisimpcop %>%
+getADU <- impsegcop %>%
   filter(ImpType == "ADU")
 
 # find PropID of houses with multiple ADU's
@@ -36,7 +35,7 @@ obsADU <- getADU %>%
            c("R125360", "R205839", "R223702", "R227223", "R281069", "R318113"))
 
 # sleek version (Not Working 2/7)
-ADU_column2 <- gisimpcop %>%
+ADU_column2 <- impsegcop %>%
   select(ImpType, PropID) %>%
   mutate(ADU_dummy = ifelse(freq(PropID) == 1, "0", "1"))
 
