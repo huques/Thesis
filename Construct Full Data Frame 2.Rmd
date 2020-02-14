@@ -25,7 +25,7 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 ```{r}
 #----------------------
 # GDB sent 10/29 via email
-gdb <- "./DATA/data2.gdb"
+gdb <- "/Users/kobleary/Desktop/DATA/data2.gdb"
 
 capacity <- st_read(gdb, layer = "bli_development_capacity")
 impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
@@ -35,38 +35,38 @@ school <- st_read(gdb, layer = "school_attendance_areas")
 
 #----------------------
 # GDB sent 10/10 via USB
-gdb2 <- "./DATA/data1.gdb"
+gdb2 <- "/Users/kobleary/Desktop/DATA/data1.gdb"
 
 taxlots <- st_read(gdb2, "taxlots_20191010")
 footprints <- st_read(gdb2, "building_footprints_20191010")
 
 #----------------------
 # GDB sent 11/12 via email
-gdb3 <- "./DATA/data_20191112.gdb"
+gdb3 <- "/Users/kobleary/Desktop/DATA/data_20191112.gdb"
 
 bli_constraints <- st_read(gdb3, "bli_constraints_all")
 nbhd <- st_read(gdb3, "neighborhoods_no_overlap")
 
 #----------------------
 # GDB sent 11/22 via email
-gdb4 <- "./DATA/tree_canopy.gdb"
+gdb4 <- "/Users/kobleary/Desktop/DATA/tree_canopy.gdb"
 
 bli_constraints_v2 <- st_read(gdb4, "bli_constraints_v2_pts_run4")
 
 #----------------------
 # SHP sent 11/25 via email
-ugb <- st_read("./DATA/ugb/ugb.shp") 
+ugb <- st_read("/Users/kobleary/Desktop/DATA/ugb/ugb.shp") 
 
 
 #----------------------
 # GDB sent 2/10 via email
-gdb5 <- "./DATA/canopy_20200210.gdb"
+gdb5 <- "/Users/kobleary/Desktop/DATA/canopy_20200210.gdb"
 
 canopy <- st_read(gdb5, "canopy_taxlot_intersect")
 
 #----------------------
 # GDB 2/11 from PortlandMaps
-walk_gdb <- "./DATA/Complete_Neighborhoods_Scoring_Surface"
+walk_gdb <- "/Users/kobleary/Desktop/DATA/Complete_Neighborhoods_Scoring_Surface"
 
 walk <- st_read(walk_gdb, 
            layer = "Complete_Neighborhoods_Scoring_Surface")
@@ -101,6 +101,7 @@ propids <- taxlots_pruned %>%
 # sum(data.frame(table(taxlots_pruned$PROPERTYID))$Freq > 1)
 
 ```
+
 
 ### Complete Neighborhood Walkscores!!!
 
@@ -365,10 +366,8 @@ cityhall <- cityhall %>%
   st_set_crs(4326) %>%
   st_transform(2913)
 
-fugly %<>% 
-  mutate(dist_cityhall = st_distance(cityhall, 
-                                     fugly,
-                                     which = "Euclidean"))
+# HERE IS THE ERROR
+fugly$dist_cityhall <- st_distance(cityhall, fugly, which = "Euclidean")[1,]
 ```
 
 
@@ -428,9 +427,11 @@ Now we will try merging/collapsing footprints on this smaller subset of the enti
 ftprints_pruned <- footprints %>%
   filter(STATE_ID %in% stateids)
 
+
+
 # Make collapsed footprints dataset called `allfeet`
 ftprints_pruned %<>% 
-  lwgeom::st_make_valid() %>%
+  st_drop_geometry() %>%
   dplyr::group_by(STATE_ID) %>%
   dplyr::summarise(totalsqft = sum(BLDG_SQFT, na.rm = T),
             yearbuilt = mean(YEAR_BUILT, na.rm = T),
@@ -440,8 +441,7 @@ ftprints_pruned %<>%
             maxheight = mean(MAX_HEIGHT, na.rm = T),
             volume = mean(VOLUME, na.rm = T),
             bldgtype = BLDG_TYPE[1],
-            bldguse = BLDG_USE[1]) %>%
-  st_drop_geometry()
+            bldguse = BLDG_USE[1]) 
 
 # Left join ftprints_pruned to fugly
 fugly <- left_join(fugly, ftprints_pruned, 
@@ -646,15 +646,15 @@ fugly <- st_join(st_centroid(fugly), non_id_constraints)
 
 ```{r}
 # Load zoning shape files
-zoningaug2014 <- st_read("./DATA/Zoning_History/Zoning_2014_Aug_pdx.shp")
-zoningfeb2014 <- st_read("./DATA/Zoning_History/Zoning_2014_Feb_pdx.shp")
-zoningaug2015 <- st_read("./DATA/Zoning_History/Zoning_2015_Aug_pdx.shp")
-zoningfeb2015 <- st_read("./DATA/Zoning_History/Zoning_2015_Feb_pdx.shp")
-zoningaug2016 <- st_read("./DATA/Zoning_History/Zoning_2016_Aug_pdx.shp")
-zoningfeb2016 <- st_read("./DATA/Zoning_History/Zoning_2015_Feb_pdx.shp")
-zoningaug2017 <- st_read("./DATA/Zoning_History/Zoning_2017_Aug_metro.shp")
-zoningaug2018 <- st_read("./DATA/Zoning_History/Zoning_2018_Aug_pdx.shp")
-zoningfeb2018 <- st_read("./DATA/Zoning_History/Zoning_2018_Feb_pdx.shp")
+zoningaug2014 <- st_read("/Users/kobleary/Desktop/DATA/Zoning_History/Zoning_2014_Aug_pdx.shp")
+zoningfeb2014 <- st_read("/Users/kobleary/Desktop/DATA/Zoning_History/Zoning_2014_Feb_pdx.shp")
+zoningaug2015 <- st_read("/Users/kobleary/Desktop/DATA/Zoning_History/Zoning_2015_Aug_pdx.shp")
+zoningfeb2015 <- st_read("/Users/kobleary/Desktop/DATA/Zoning_History/Zoning_2015_Feb_pdx.shp")
+zoningaug2016 <- st_read("/Users/kobleary/Desktop/DATA/Zoning_History/Zoning_2016_Aug_pdx.shp")
+zoningfeb2016 <- st_read("/Users/kobleary/Desktop/DATA/Zoning_History/Zoning_2015_Feb_pdx.shp")
+zoningaug2017 <- st_read("/Users/kobleary/Desktop/DATA/Zoning_History/Zoning_2017_Aug_metro.shp")
+zoningaug2018 <- st_read("/Users/kobleary/Desktop/DATA/Zoning_History/Zoning_2018_Aug_pdx.shp")
+zoningfeb2018 <- st_read("/Users/kobleary/Desktop/DATA/Zoning_History/Zoning_2018_Feb_pdx.shp")
 
 colnames(zoningaug2014) <- paste0(colnames(zoningaug2014), "_aug2014")
 st_geometry(zoningaug2014) <- "geometry_aug2014"
@@ -717,7 +717,7 @@ zones_over_time %<>%
                                    sale_zone))
 
 # Load crosswalk from Nick sent via email 02/04
-crosswalk <- read_xlsx("./DATA/zoning_crosswalk.xlsx")
+crosswalk <- read_xlsx("/Users/kobleary/Desktop/DATA/zoning_crosswalk.xlsx")
 crosswalk %<>%
   rename(sale_zone = `Base Zone`)
 
