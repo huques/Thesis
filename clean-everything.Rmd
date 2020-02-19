@@ -1,0 +1,73 @@
+---
+title: "Cleaning everything"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# CLEANING EVERYTHING
+```{r}
+library(tidyverse)
+library(readxl)
+df <- read_csv("./DATA/thesis-data.csv")
+```
+
+# Note that the isVacant variable from the capacity data frame
+# is equal to 1 when partially or fully vacant, so a value of 1
+# makes sense, however may not be super useful for our purposes (it'd be better
+# to have 0/1 partially or not vacant v. fully vacant).
+
+
+# May want to check out some of these properties on a map to understand what
+# is vacant is capturing & whether or not we want to keep it in the analysis.
+```{r}
+summary(df$percent_vacant)
+summary(df$SALEPRICE)
+table(df$prop_type)
+
+df %>% 
+  select(contains("con")) %>%
+  select(-contains("CONCRETE|SECOND|only|pct")) %>%
+  colSums(na.rm = T)
+```
+
+
+
+From the table above, we have 27,200 SFR, 4792 MFR, and 2008 mixed use properties.
+
+## Which transactions are arms-length?
+```{r}
+assvalue <- df %>% select(STATE_ID, SITEADDR, MKTVALYR1, 
+                          LANDVAL1, MKTVALYR2, LANDVAL2, 
+                          MKTVALYR3, LANDVAL3, SALEPRICE, saledate) %>%
+  mutate(diff = SALEPRICE - LANDVAL3, 
+         ratio = SALEPRICE/LANDVAL3 * 100) 
+
+assvalue %>%
+  filter(ratio < 20) %>%
+  select(SALEPRICE, ratio, diff, everything()) %>%
+  arrange(ratio)
+
+ggplot(data = df, aes(log(SALEPRICE))) + geom_density()
+
+dim(assvalue %>% filter(SALEPRICE == 0))
+
+# SAMPLE LOT THAT HAS TINY RATIO
+df %>% filter(STATE_ID == "1S1E17CA  2200")
+
+df %>% filter(grepl("LEVY", SITEADDR))
+# could use the variable PRPCD_DESC to help us remove some of the outliers
+# note that htis is zoned within SFR, weird i guess it's just undeveloped.  
+```
+
+There are 516 properties in our sample that sold for $0. Also what does levy code 001 mean? Should we remove these? It appears from Portlandmaps.com that these are lots that do not have buildings. 
+
+Also note that the `PRPCD_DESC` variable says "VACANT LAND" so we may be able to filter out the vacant parcels by filtering based upon this. If the isVacant variable is not as helpful (from  the capacity layer), we could even reconstruct that variable to utilize `PRPCD_DESC` instead. 
+
+
+
+
+
+
