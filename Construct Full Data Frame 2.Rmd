@@ -447,8 +447,7 @@ ftprints_pruned %<>%
             minheight = mean(MIN_HEIGHT, na.rm = T),
             maxheight = mean(MAX_HEIGHT, na.rm = T),
             volume = mean(VOLUME, na.rm = T),
-            bldgtype = BLDG_TYPE[1],
-            bldguse = BLDG_USE[1]) 
+            n_units = sum(UNITS_RES, na.rm = T)) 
 
 # Left join ftprints_pruned to fugly
 fugly <- left_join(fugly, ftprints_pruned, 
@@ -657,18 +656,18 @@ non_id_constraints <- bli_constraints_v2 %>%
   select(contains("con")) %>%
   mutate_if(is.factor, genDummy)
 
+st_geometry(non_id_constraints) <- st_geometry(bli_constraints)
+
 # This join increases # of observations because sometimes there are several observations
 # in non_id_constraints that are within the confines of a single taxlot polygon
-firstjoin <- st_join(taxlots_pruned, non_id_constraints, left = TRUE)
+firstjoin <- st_join(st_centroid(taxlots_pruned), non_id_constraints, left = TRUE)
 
 # Collapse these observations so that we keep all the constraints as either 1 or 0 for each 
 # property. Here, we're not worrying about partial constraints yet.
 dumdum_constraints <- firstjoin %>%
   group_by(STATE_ID) %>%
   select(contains("con")) %>% 
-  st_drop_geometry() %>%
-  summarise_all(sum) %>%
-  mutate_if(is.numeric, setToOne)
+  st_drop_geometry() 
 
 fugly <- left_join(fugly, dumdum_constraints, by = "STATE_ID")
 print(paste0("constraints Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$Freq > 1))))
