@@ -3,6 +3,9 @@
 
 import taxlots 
 
+# explicitly define the missing values in a factor level
+taxlots_copy <- taxlots
+taxlots$STATE_ID <- fct_explicit_na(taxlots$STATE_ID)
 
 # selects property id's and vacancy variable
 vacancy <- taxlots %>%
@@ -11,7 +14,7 @@ vacancy <- taxlots %>%
 
 # check is STATE_ID in taxlots is more than unique
 sum(data.frame(table(taxlots$STATE_ID))$Freq > 1)
-multi_state_id <- taxlots %>%
+multi_state_id <- taxlots_copy %>%
   group_by(STATE_ID) %>%
   mutate(n = n()) %>%
   filter(n > 1)
@@ -20,11 +23,9 @@ multi_state_id <- taxlots %>%
 vacancy_pruned <- vacancy %>%
   group_by(STATE_ID) %>%
   mutate(n = n()) %>%
-  filter(n == 1) %>%
-  mutate(VACANT = recode(PRPCD_DESC, 
-                       "VACANT LAND" = 1,
-                       .default = 0)) %>%
-  select(-PRPCD_DESC, -n)
+  filter(n == 1) 
+
+vacancy_pruned$VACANT <- vacancy_pruned$PRPCD_DESC == "VACANT LAND"
 
 
 # creates a buffer called buffer_dist (measured in meters)
