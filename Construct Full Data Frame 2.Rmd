@@ -277,7 +277,7 @@ vacant_var <- vacant_join_buffy %>%
 
 # join to dataframe 
 fugly <- left_join(fugly, vacant_var, by = "STATE_ID")
-print(paste0("vacant Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$Freq > 1))))
+print(paste0("vacant Join: ", as.character(sum(data.frame(table(vacancy$STATE_ID))$Freq > 1))))
 
 ```
 
