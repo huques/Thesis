@@ -1,0 +1,126 @@
+---
+title: "Regressions"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load packages
+```{r include=FALSE}
+library(tidyverse)
+library(magrittr)
+library(kableExtra)
+library(caret)
+```
+
+## Load data and clean
+1) Drop observations with ProudGround as the owner (unreliable sale prices). Define an "arms-length transaction" to be the ratio between the assessed land value and the sale price. Usually sale price is greater than the most recent assessed land value without improvements. I remove observations in which this ratio is less than .2, a more conservative approach. Note the median here is 220 and first quantile is 179.8.
+
+
+```{r warning=FALSE}
+df <- read_csv("/Users/ryankobler/Desktop/thesis/Thesis/DATA/thesis-data.csv")
+
+# DROPS
+df %<>%
+  mutate(proud_flag =  grepl("PROUD", OWNER1) | grepl("PROUD", OWNER2) | grepl("PROUD", OWNER3),
+         trust_flag = grepl("TRUST", OWNER1) | grepl("TRUST", OWNER2) | grepl("TRUST", OWNER3), 
+         top_1 =  SALEPRICE > quantile(SALEPRICE, .99),
+         price_diff = SALEPRICE - LANDVAL3, 
+         price_ratio = SALEPRICE/LANDVAL3 * 100,
+         vacant_dummy = PRPCD_DESC == "VACANT LAND") %>%
+  mutate(arms_length = price_ratio > 20)
+
+constraints <- c("conWetland", "conNatAm", 
+                   "conAirHgt", "conCovrly", "conPovrly", "conHeliprt",
+                   "conHist", "conHistLdm", "conInstit", "conLSHA", "conLUST",
+                   "conNoise", "conPrvCom", "conSewer", "conSLIDO",
+                   "conSlp25", "conStorm", "conTranCap", "conTranSub",
+                   "conTranInt", "conTranSub", "conView", "conWater", 
+                 "conGW", "conPubOwn", "conFldway", "conFld100", "conECSI")
+constraints.form <- paste(constraints, collapse = " + ")
+
+# switch the NAs in the constraints to 0s
+to0 <- function(x){ifelse(is.na(x), 0, x)}
+
+trim <- df %>% 
+  filter(proud_flag == F & top_1 == F & arms_length == T & vacant_dummy == F) %>%
+  mutate_at(vars(constraints), to0) 
+
+constraint_sums <- trim %>%
+  select(constraints) %>%
+  rowSums()
+
+trim %<>%
+  mutate(is_constrained = constraint_sums > 0)
+```
+
+
+## Regression 1
+Without neighborhood or school catchment area fixed effects. 
+
+```{r}
+gar_sqft_sum <- trim %>%
+  select(matches("gar")) %>%
+  rowSums()
+
+# attic sqft
+attic_sqft_sum <- trim %>%
+  select(matches("attic")) %>%
+  rowSums()
+
+trim %<>%
+  mutate(garage_sqft = gar_sqft_sum,
+         garage_dum = garage_sqft > 0,
+         attic_sqft = attic_sqft_sum,
+         attic_dum = attic_sqft > 0,
+         year_sold = as.factor(format(saledate, "%Y")))
+         
+# since the date objects are all the same length, we can
+# just gra
+
+# 1. What units are avgheight in?
+# 2. Do we have reliable number of stories
+# 3. Recall that isVacant is the old guy/
+formula_sfr <- as.formula(paste("I(log(SALEPRICE)) ~ h_baths + f_baths + n_fireplaces +
+     pct_canopy_cov + dist_ugb + 
+     dist_cityhall + YEARBUILT + CN_score + BLDGSQFT + 
+     AREA + garage_sqft + attic_dum + avgheight + year_sold + ",
+                            constraints.form))
+
+m1 <- lm(formula_sfr, data = trim %>% filter(prop_type == "Single-family"))
+summary(m1) 
+
+formula_mfr <- as.formula(paste("I(log(SALEPRICE)) ~ h_baths + f_baths + n_fireplaces +
+     pct_canopy_cov + dist_ugb + UNITS +
+     dist_cityhall + YEARBUILT + CN_score + BLDGSQFT + 
+     AREA + garage_sqft + attic_dum + avgheight + year_sold + ",
+                                constraints.form))
+
+m2 <- lm(formula_mfr, data = trim %>% 
+           filter(prop_type == "Multi-family"))
+
+summary(m2)
+```
+
+
+## Using E-net on all variables 
+We have missing data, so e-net can't be run.
+```{r}
+enet_df <- trim %>%
+  select(-matches("val|date|grade|arms_length|shared|source|SITEADDR|owner|X1|state_id"))
+
+set.seed(42)
+cv_5 <- trainControl(method = "cv", number = 5)
+
+hit_elnet <- train(I(log(SALEPRICE)) ~ ., data = enet_df,
+  method = "glmnet",
+  trControl = cv_5, 
+  na.action = na.omit)
+
+```
+
+
+
+
