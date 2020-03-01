@@ -1,0 +1,248 @@
+---
+title: "Exploratory Data Analysis"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load packages
+```{r include=FALSE}
+library(tidyverse)
+library(magrittr)
+library(kableExtra)
+library(caret)
+library(rstudioapi)
+require(cowplot)
+```
+
+## Load data and clean
+1) Drop observations with ProudGround as the owner (unreliable sale prices). Define an "arms-length transaction" to be the ratio between the assessed land value and the sale price. Usually sale price is greater than the most recent assessed land value without improvements. I remove observations in which this ratio is less than 0.2, a more conservative approach. 
+
+Note the median here is 220 and first quantile is 179.8.
+
+
+```{r warning=FALSE}
+df <- read_csv("/Users/ryankobler/Desktop/thesis/Thesis/DATA/thesis-data.csv")
+
+# Testing automatically setting the pathname)
+# current_path <- rstudioapi::getActiveDocumentContext()$path 
+# folders <- unlist(str_split(current_path, "/"))
+# print(folders)
+# i <- which("Thesis" == folders)
+# print(i)
+# short_fold <- folders[1:i]
+# print(short_fold)
+# new_path <- paste(short_fold, collapse = "/")
+# setwd(dirname(new_path))
+###########
+
+
+# DROPS
+df %<>%
+  mutate(proud_flag =  grepl("PROUD", OWNER1) | grepl("PROUD", OWNER2) | grepl("PROUD", OWNER3),
+         trust_flag = grepl("TRUST", OWNER1) | grepl("TRUST", OWNER2) | grepl("TRUST", OWNER3), 
+         top_1 =  SALEPRICE > quantile(SALEPRICE, .99),
+         price_diff = SALEPRICE - LANDVAL3, 
+         price_ratio = SALEPRICE/LANDVAL3 * 100,
+         vacant_dummy = PRPCD_DESC == "VACANT LAND") %>%
+  mutate(arms_length = price_ratio > 20)
+
+constraints <- c("conWetland", "conNatAm", 
+                   "conAirHgt", "conCovrly", "conPovrly", "conHeliprt",
+                   "conHist", "conHistLdm", "conInstit", "conLSHA", "conLUST",
+                   "conNoise", "conPrvCom", "conSewer", "conSLIDO",
+                   "conSlp25", "conStorm", "conTranCap", "conTranSub",
+                   "conTranInt", "conTranSub", "conView", "conWater", 
+                 "conGW", "conPubOwn", "conFldway", "conFld100", "conECSI")
+constraints.form <- paste(constraints, collapse = " + ")
+
+# switch the NAs in the constraints to 0s
+to0 <- function(x){ifelse(is.na(x), 0, x)}
+
+trim <- df %>% 
+  filter(proud_flag == F & top_1 == F & 
+           arms_length == T & vacant_dummy == F) %>%
+  mutate_at(vars(constraints), to0) %>%
+  mutate(YEARBUILT = case_when(
+    YEARBUILT < 1000 ~ NA_real_,
+    YEARBUILT > 2019 ~ NA_real_,
+    TRUE ~ YEARBUILT))
+
+constraint_sums <- trim %>%
+  select(constraints) %>%
+  rowSums()
+
+trim %<>%
+  mutate(is_constrained = constraint_sums > 0)
+
+gar_sqft_sum <- trim %>%
+  select(matches("gar")) %>%
+  rowSums()
+
+# attic sqft
+attic_sqft_sum <- trim %>%
+  select(matches("attic")) %>%
+  rowSums()
+
+trim %<>%
+  mutate(garage_sqft = gar_sqft_sum,
+         garage_dum = garage_sqft > 0,
+         attic_sqft = attic_sqft_sum,
+         attic_dum = attic_sqft > 0,
+         year_sold = as.factor(format(saledate, "%Y")))
+         
+```
+
+## Scatterplots: looking for linearity
+
+Let's see how the control variables stack up with respect to the dependent variable, log of sale price. 
+
+
+```{r, cache = T, warning = F}
+set.seed(78)
+cts_vars <- c("dist_cityhall", "dist_ugb", 
+"f_baths", "UNITS", "totalsqft", "AREA", "avgheight",
+"pct_canopy_cov", "YEARBUILT", "CN_score", "attic_sqft", "BLDGSQFT")
+
+n <- nrow(df)
+df <- sample_n(trim %>% filter(prop_type == "Single-family"), n) %>%
+  filter(YEARBUILT < 2020 & YEARBUILT > 0)
+plot_list <- list()
+
+plotCts <- function(i){
+  ggplot(data = df, 
+                         aes(y = I(log(SALEPRICE)), 
+                             x = get(cts_vars[i]))) +
+    geom_jitter(alpha = 0.4) +
+    labs(title = "",
+         y = "sale price",
+         x = cts_vars[i]) + 
+    theme_minimal() %>% list()
+}
+plot_list <- lapply(1:length(cts_vars), plotCts)
+
+m <- length(plot_list)
+it <- floor(m / 4)
+for(i in 1:it){
+  ind <- floor(i/4) + 1
+  cowplot::plot_grid(plotlist = plot_list[ind:max(4*i,m)], ncol = 2, nrow = 2)
+}
+
+cowplot::plot_grid(plotlist = plot_list[1:4], ncol = 2, nrow = 2)
+cowplot::plot_grid(plotlist = plot_list[5:8], ncol = 2, nrow = 2)
+cowplot::plot_grid(plotlist = plot_list[9:12], ncol = 2, nrow = 2)
+```
+
+### Multi-family residential relationships
+
+From the above plots, we can see that the square footage and distance to **city hall** appear to be quadratic in log of sale price. Though **full baths** is discrete, we can pick up on a pretty linear trend. 
+
+**area** = total taxlot area. Seems highly variable. Should investigate the role of outliers here. I suspect it will also be quadratic and increasing in $y$. It's pretty useless leaving the outliers in.
+
+**yearbuilt** seems to be parabolic, which sort of makes sense. We could hypothesize that older homes that are still around (have been sold in the last five years) have been better upkept and brand-new homes may also be more expensive. How do we capture/specify this non-linear relationship?
+
+**dist_ugb** some heteroskedasticity here, which kind of makes sense. There are fewer homes located right on the periphery of the UGB. I can imagine these would be more likely to be either run-down or come with a large amount of property. That is, the characteristics of the property may be less regulated and uniform on the outskirts of the city.
+
+
+## Regression 1
+Without neighborhood or school catchment area fixed effects. 
+
+```{r}
+# since the date objects are all the same length, we can
+# just gra
+
+# 1. What units are avgheight in?
+# 2. Do we have reliable number of stories
+# 3. Recall that isVacant is the old guy/
+formula_sfr <- as.formula(paste("I(log(SALEPRICE)) ~ h_baths + f_baths + n_fireplaces +
+     pct_canopy_cov + dist_ugb + 
+     dist_cityhall + YEARBUILT + CN_score + BLDGSQFT + 
+     AREA + garage_sqft + attic_dum + avgheight + year_sold + ",
+                            constraints.form))
+
+m1 <- lm(formula_sfr, data = trim %>% filter(prop_type == "Single-family"))
+summary(m1) 
+
+formula_mfr <- as.formula(paste("I(log(SALEPRICE)) ~ h_baths + f_baths + n_fireplaces +
+     pct_canopy_cov + dist_ugb + UNITS +
+     dist_cityhall + YEARBUILT + CN_score + BLDGSQFT + 
+     AREA + garage_sqft + attic_dum + avgheight + year_sold + ",
+                                constraints.form))
+
+m2 <- lm(formula_mfr, data = trim %>% 
+           filter(prop_type == "Multi-family"))
+
+summary(m2)
+```
+
+## VIFs
+
+Let's look for multicollinearity in the above models.
+
+```{R}
+library(car)
+m_controls <- trim %>%
+  filter(prop_type == "Single-family" & 
+           #NAME != "WEST PORTLAND PARK" &
+           #NAME != "SYLVAN-HIGHLANDS" &
+           #NAME != "SOUTHWEST HILLS RESIDENTIAL LEAGUE" &
+           !grepl(NAME, "UNCLAIMED") &
+           HIGH_SCH != "FRANKLIN HS" &
+           !is.na(NAME) &
+           MIDDLE_SCH != "N/A" &
+           MIDDLE_SCH != "MT. TABOR MIDDLE" &
+         ELEM_SCH != "WOODSTOCK") %>%
+  lm(formula = I(log(SALEPRICE)) ~ h_baths + f_baths + n_fireplaces + 
+       dist_cityhall + dist_ugb + YEARBUILT + CN_score +
+       pct_canopy_cov + AREA + BLDGSQFT + garage_sqft +
+       attic_dum + avgheight + year_sold 
+       )
+summary(m_controls)
+
+# no fixed effects controls 
+car::vif(m_controls, singular.ok = T) %>% as.data.frame() %>%
+  mutate(var = rownames(.)) %>%
+  arrange(desc(GVIF)) %>%
+  select(var, everything())
+```
+
+Note here that the VIFs for our non-fixed effect models are stable for SFR (all less than 3).
+
+Should check if the school catchment areas and neighborhood fixed effects are the same. We have perfect multicollinearity when we include both. Also note that the VIF skyrockets for the distance, CN score variables, thereby increasing variance of the model.  
+
+NBHD fixed effects: $R^2_{adj} = 0.7238$.
+
+HIGH_SCH catchment area fixed effects: $R_{adj}^2 = 0.6968$. This may have more to with the granularity of the model.  
+
+## Bias-variance: spatial fixed effects
+Using test/training subsets of the full data frame.
+
+## Missingness
+```{r}
+# # find which columns are mostly present
+# nas <- is.na(enet_df) %>% as.data.frame()
+# nacols <- nas %>% colSums()
+# naimps <- trim %>% filter(is.na(`DECK`)) %>%
+#   select(prop_type, SALEPRICE, sale_zone, STATE_ID, SITEADDR, everything())
+```
+
+## Using E-net on all variables 
+We have missing data, so e-net can't be run.
+```{r}
+# enet_df <- trim %>%
+#   select(-matches("val|date|grade|arms_length|shared|source|SITEADDR|owner|X1|state_id|rno|city|tax|legal_desc|AUDIT_NBRH|bldgtype|BEDROOMS|minheight|maxheight|Category|Zone Description|FRONTAGE|COMMPLAN|volume|surfelev"))
+# 
+# set.seed(42)
+# cv_5 <- trainControl(method = "cv", number = 5)
+# 
+# hit_elnet <- train(I(log(SALEPRICE)) ~ ., data = enet_df,
+#   method = "glmnet",
+#   trControl = cv_5, 
+#   na.action = na.omit)
+```
+
+
+
+
