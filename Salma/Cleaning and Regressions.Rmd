@@ -1,0 +1,258 @@
+---
+title: "Cleaning and Regressions"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Import Packages + Read in Data
+
+```{r Import Packages}
+library(tidyverse)
+library(magrittr)
+library(here)
+
+# read in csv
+thesis_data <- read_csv(here("DATA","thesis-data.csv"))
+```
+
+
+### Create + Clean SFR and MU dataframes
+
+```{r Create Data Frames}
+
+# Create Data Frames
+SFR <- thesis_data %>%
+  filter(prop_type == "Single-family")
+
+MU <- thesis_data %>%
+  filter(prop_type == "Mixed Use")
+
+# Check for duplicates one more time
+# All equal zero, meaning there are no duplicates of each of these variables
+# Means we can use any one of them as a way of IDing observations uniquely
+
+# state_id
+sum(data.frame(table(SFR$STATE_ID))$Freq > 1) 
+sum(data.frame(table(MU$STATE_ID))$Freq > 1) 
+sum(data.frame(table(thesis_data$STATE_ID))$Freq > 1) 
+
+# rno
+sum(data.frame(table(SFR$RNO))$Freq > 1) 
+sum(data.frame(table(MU$RNO))$Freq > 1) 
+sum(data.frame(table(thesis_data$RNO))$Freq > 1) 
+
+# property id
+sum(data.frame(table(SFR$PROPERTYID))$Freq > 1) 
+sum(data.frame(table(MU$PROPERTYID))$Freq > 1) 
+sum(data.frame(table(thesis_data$PROPERTYID))$Freq > 1) 
+
+# tlid
+sum(data.frame(table(SFR$TLID))$Freq > 1) 
+sum(data.frame(table(MU$TLID))$Freq > 1) 
+sum(data.frame(table(thesis_data$TLID))$Freq > 1) 
+
+
+# Questions
+# What to do with non-conforming? Look up on PDX Maps
+```
+
+SFR data frame has 27,200 observations.
+
+MU data frame has 2,008 observations. 
+
+No observation repeat in any of the data frames acording to the unique IDs we have recorded for them. 
+
+
+### Clean the Full Data Frame 
+## (constructed in `Cleaning` and `Construct Full Data Frame 2`)
+
+```{r Clean}
+# Everything
+
+# Make a string of constraints and percent canopy names called "con_names" 
+# for use in regression
+clean <- thesis_data %>%
+  select(contains("con"), contains("pct")) %>%
+  select(-c("CONCRETE", "FIN SECOND", "PAVING/CONCRETE ONLY", "UNF SECOND")) 
+  
+con_names <- names(clean)
+con_names <- paste(con_names, collapse = " + ")
+
+# Compare SALEPRICE to TOTALVAL3 --- 
+# note that this is the value of land + building
+# can take on values 09/27/17, 2017, or 2018
+    
+
+# create flags for things we want to omit
+test1 <- thesis_data %>%
+  mutate(top_1 =  SALEPRICE > quantile(SALEPRICE, .99),
+         price_diff = SALEPRICE - LANDVAL3, 
+         price_ratio = SALEPRICE/LANDVAL3 * 100,
+         vacant_dummy = PRPCD_DESC == "VACANT LAND",
+         proud_flag =  grepl("PROUD", OWNER1) | grepl("PROUD", OWNER2) | grepl("PROUD", OWNER3),
+         trust_flag = grepl("TRUST", OWNER1) | grepl("TRUST", OWNER2) | grepl("TRUST", OWNER3)) %>%
+  mutate(arms_length = price_ratio > 20)
+
+# salma looking obs by obs
+view <- test1 %>%
+  filter(top_1 == TRUE)
+
+# removing observations 
+dat1 <- test1 %>% #34,628
+  filter(top_1 == FALSE, #34,281
+         vacant_dummy == FALSE, #32,984
+         arms_length == TRUE, #32,252
+         proud_flag == FALSE, #32,231
+         #trust_flag == FALSE -- these might be ones to take out on a case by case basis
+  )
+
+
+
+ggplot(test1, aes(x = SALEPRICE, y = TOTALVAL3)) +
+  geom_line() 
+
+summary(test1$top_1)
+summary(test1$price_diff)
+summary(test1$price_ratio)
+summary(test1$vacant_dummy)
+summary(test1$arms_length)
+summary(test1$proud_flag)
+summary(test1$trust_flag)
+
+
+## QUESTIONS
+## Does the order I filter in matter? If I pipe I'll get a different answer?
+## What's up with 322-336 WI/ SW 3RD AVE? 215 sqft and sold for 3mil
+  ## might be smart to have a $ per sqft dummy as well
+#
+## TASKS
+## clean TOTALVAL3 so that all values have same format
+## go through trust flag one by one and remove
+## take out observation with string LLC and then get top 1%
+## Year built make 9999 NA
+## remove props with small totalarea -- some are like 200 sqft
+## remove building type as garage?
+## check dates are in order
+
+```
+
+Here, we created several variables that will help us determine what a reasonable observation should be. 
+
+First we removed observations that were actually vacant properties. These properties were tagged as "Vacant Land" in the taxlot data. We removed 1,307 vacant properties, or 4%, from our dataset.
+
+We found the difference between what we consider the most recent assessed value of the property and the sale price. In a perfect market (?), the sale price should be equal to the assessed value. However, due to factors such as imperfect information, sale price can be much higher or lower than the assessed value. Sale price is much higher than assessed value in situations where ____. Conversely, sale price is much lower than assessed value in transactions that are not considered "arms-length". Arms-length transactions are assumed to have been completed in the market, and with market forces acting upon both the buyer and the seller. For example, if a homeowner sold their property at a discount to a family member, there is an outside influence on the transaction (the relationship between buyer and seller) that affects the sale price. Arms-length transactions are more of a concept than a strict cut-off, so we were able to be flexible with how we applied the definition to our dataset.
+
+We chose to assign the property of an "arms-length transaction" to those properties whose sale price-to-assessed value ratio was at least 20%. In other words, we kept observations whose sale price was at most 20% lower than the assessed value. Our reasoning for this was to allow some flexibility with regard to homeowners with less information. Ultimately, this led to eliminating 698 observations, or 2% of our total data. 
+
+While the above process cleaned the bottom half of our data where sale price was too low, we still worried about including properties that sold for too high a price. To combat this, we eliminated the top 1% of observations with the highest sale prices. These properties were often owned by large investment or real estate firms who do not operate in the same market as the average homeowner (NOTE this is only applicable for SFR). Another reason for an inordinately high sale price is recording error. The top 1% is made up of 347 observations with an average sale price of _____. 
+
+Removing the most expensive properties helps combat including real estate company transactions, there are also myriad "land trusts" in Portland that hold land. TALK MORE ABOUT THIS!!!!!!!!!! A key land trust is known as "Proud Ground". TALK TALK TALK. We eliminated properties owned by Proud Ground (italicize?). Many of the Proud Ground properties were vacant. 
+
+
+### Regressions
+
+```{r Regress SFR}
+# SFR
+
+# Create variables
+i <- y ~ x
+j <- y ~ x + x1
+k <- y ~ x + x1 + x2
+
+# Concatentate
+formulae <- list(as.formula(i),as.formula(j),as.formula(k))
+
+
+# pre-analysis formula
+sfr_formula = formula(paste0("SALEPRICE ~ 
+                             f_baths + h_baths + n_fireplaces + yearbuilt + totalsqft + I(totalsqft^2) + taxlot_area + FLOORS + surfelev + percent_vacant + dist_cityhall + HIGH_SCH + MapLabel + CN_score + dist_ugb + ", con_names))
+
+# Salma Intuition Formula
+sfr_formula = SALEPRICE ~ taxlot_area + totalsqft + yearbuilt + COUNTY + saledate + MapLabel + percent_vacant + HIGH_SCH + dist_cityhall + dist_ugb + con_names
+
+
+# # QUESTIONS
+# # could switch zip code and neighborhood out, or take our county altogether
+# # saledate?
+# # high school or elementary school?
+# # is there a baths combined var?
+# # turn year built into age for better interpretation?
+# # units of surfelev? "Average of the average surface elevation (above NAVD88 datum) of the land beneath and across all buildling footprints in feet"
+#   
+# # TASKS
+# # check all variables for necessary transformations
+# # combine GARAGE
+# # create CAPACITY
+# # create OVERSIZED LOT DUMMY
+# # combine BASEMENT
+# # combine ATTIC
+# # SAT? Student exp?
+# # transform zone
+
+# Box-Cox linear Regression
+
+
+
+# Linear Regression
+
+# pre-analysis formula
+sfr_lin = formula(paste0("SALEPRICE ~ 
+                             f_baths + h_baths + n_fireplaces + yearbuilt + totalsqft + I(totalsqft^2) + taxlot_area + FLOORS + surfelev + percent_vacant + dist_cityhall + HIGH_SCH + MapLabel + CN_score + dist_ugb + ", con_names))
+
+# regression
+sfr_mod_linear <- lm(sfr_lin, SFR)
+summary(sfr_mod_linear)
+
+
+
+
+
+# Semi-log Regression
+
+# pre-analysis formula
+sfr_log = formula(paste0("I(log(SALEPRICE)) ~ 
+                             f_baths + h_baths + n_fireplaces + yearbuilt + totalsqft + I(totalsqft^2) + taxlot_area + FLOORS + surfelev + percent_vacant + dist_cityhall + HIGH_SCH + MapLabel + CN_score + dist_ugb + ", con_names))
+
+test <- SFR %>%
+  mutate(logSALEPRICE = log(SALEPRICE))
+
+# regression
+sfr_mod_log <- lm(sfr_log, SFR)
+summary(sfr_mod_log)
+
+
+
+
+```
+
+
+```{r Regress MU}
+# MU
+
+
+# Box-Cox linear Regression
+
+
+
+# Linear Regression
+lm(formula, data, subset, weights, na.action,
+   method = "qr", model = TRUE, x = FALSE, y = FALSE, qr = TRUE,
+   singular.ok = TRUE, contrasts = NULL, offset, ...)
+
+
+# Semi-log Regression
+
+
+```
+
+
+
+
+
+
+
+
+
