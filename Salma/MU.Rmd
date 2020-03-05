@@ -1,0 +1,143 @@
+---
+title: "Mixed Use"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Import Packages + Read in Data
+
+```{r Import Packages}
+library(tidyverse)
+library(magrittr)
+library(here)
+
+# read in csv
+thesis_data <- read_csv(here("DATA","thesis-data.csv"))
+```
+
+
+### Create + Clean MU dataframe
+
+```{r Create Data Frames}
+
+# Create Data Frame
+MU <- thesis_data %>%
+  filter(prop_type == "Mixed Use")
+
+# Check for duplicates one more time
+# All equal zero, meaning there are no duplicates of each of these variables
+# Means we can use any one of them as a way of IDing observations uniquely
+
+# state_id
+sum(data.frame(table(MU$STATE_ID))$Freq > 1) 
+
+# rno
+sum(data.frame(table(MU$RNO))$Freq > 1)  
+
+# property id
+sum(data.frame(table(MU$PROPERTYID))$Freq > 1) 
+
+# tlid
+sum(data.frame(table(MU$TLID))$Freq > 1) 
+
+# Questions
+# What to do with non-conforming? Look up on PDX Maps
+```
+
+MU data frame has 2,008 observations. 
+
+No observation repeat in any of the data frames acording to the unique IDs we have recorded for them. 
+
+### Clean the Full Data Frame 
+## (constructed in `Cleaning` and `Construct Full Data Frame 2`)
+
+```{r Clean}
+
+# create flags for things we want to omit
+test1 <- MU %>%
+  mutate(top_1 =  SALEPRICE > quantile(SALEPRICE, .99),
+         price_diff = SALEPRICE - LANDVAL3, 
+         price_ratio = SALEPRICE/LANDVAL3 * 100,
+         vacant_dummy = PRPCD_DESC == "VACANT LAND",
+         proud_flag =  grepl("PROUD", OWNER1) | grepl("PROUD", OWNER2) | grepl("PROUD", OWNER3),
+         trust_flag = grepl("TRUST", OWNER1) | grepl("TRUST", OWNER2) | grepl("TRUST", OWNER3)) %>%
+  mutate(arms_length = price_ratio > 20)
+
+# salma looking obs by obs
+view <- test1 %>%
+  filter(top_1 == TRUE)
+
+# removing observations 
+dat1 <- test1 %>% #34,628
+  filter(top_1 == FALSE, #34,281
+         vacant_dummy == FALSE, #32,984
+         arms_length == TRUE, #32,252
+         proud_flag == FALSE, #32,231
+         #trust_flag == FALSE -- these might be ones to take out on a case by case basis
+  )
+
+
+
+ggplot(test1, aes(x = SALEPRICE, y = TOTALVAL3)) +
+  geom_line() 
+
+summary(test1$top_1)
+summary(test1$price_diff)
+summary(test1$price_ratio)
+summary(test1$vacant_dummy)
+summary(test1$arms_length)
+summary(test1$proud_flag)
+summary(test1$trust_flag)
+
+
+## QUESTIONS
+## Does the order I filter in matter? If I pipe I'll get a different answer?
+## What's up with 322-336 WI/ SW 3RD AVE? 215 sqft and sold for 3mil
+  ## might be smart to have a $ per sqft dummy as well
+#
+## TASKS
+## clean TOTALVAL3 so that all values have same format
+## go through trust flag one by one and remove
+## take out observation with string LLC and then get top 1%
+## Year built make 9999 NA
+## remove props with small totalarea -- some are like 200 sqft
+## remove building type as garage?
+## check dates are in order
+
+# Compare SALEPRICE to TOTALVAL3 --- 
+# note that this is the value of land + building
+# can take on values 09/27/17, 2017, or 2018
+```
+
+### Regressions
+
+```{r Regress MU}
+
+# Make a string of constraints and percent canopy names called "con_names" 
+# for use in regression
+clean <- MU %>%
+  select(contains("con"), contains("pct")) %>%
+  select(-c("CONCRETE", "FIN SECOND", "PAVING/CONCRETE ONLY", "UNF SECOND")) 
+con_names <- names(clean)
+con_names <- paste(con_names, collapse = " + ")
+
+
+
+
+# Box-Cox linear Regression
+
+
+
+# Linear Regression
+lm(formula, data, subset, weights, na.action,
+   method = "qr", model = TRUE, x = FALSE, y = FALSE, qr = TRUE,
+   singular.ok = TRUE, contrasts = NULL, offset, ...)
+
+
+# Semi-log Regression
+
+
+```

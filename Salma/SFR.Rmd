@@ -1,0 +1,330 @@
+---
+title: "Cleaning and Regressions"
+output: pdf_document
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Import Packages + Read in Data
+
+```{r}
+library(tidyverse)
+library(magrittr)
+library(here)
+library(data.table)
+
+# read in csv
+thesis_data <- read_csv(here("DATA","thesis-data.csv"))
+```
+
+
+### Create SFR Dataframe
+
+```{r}
+
+# Create Data Frames
+SFR <- thesis_data %>%
+  filter(prop_type == "Single-family")
+
+# Check for duplicates one more time
+# All equal zero, meaning there are no duplicates of each of these variables
+# Means we can use any one of them as a way of IDing observations uniquely
+sum(data.frame(table(SFR$STATE_ID))$Freq > 1) 
+sum(data.frame(table(SFR$RNO))$Freq > 1) 
+sum(data.frame(table(SFR$PROPERTYID))$Freq > 1) 
+sum(data.frame(table(SFR$TLID))$Freq > 1) 
+
+
+# QUESTIONS
+# What to do with non-conforming? Look up on PDX Maps
+```
+
+SFR data frame has 27,200 observations initially.
+
+No observation repeat in any of the data frames acording to the unique IDs we have recorded for them. 
+
+### Clean SFR Dataframe
+
+```{r}
+
+# create flags for things we want to omit
+test1 <- SFR %>%
+  select(-c(OWNER2, OWNER3, OWNERZIP, LEGAL_DESC, TAXCODE, PROP_CODE, LANDUSE, BLDGSQFT, BEDROOMS, MKTVALYR1, MKTVALYR2, LANDVAL1, LANDVAL2, BLDGVAL1, BLDGVAL2, TOTALVAL1, TOTALVAL2, ACC_STATUS, NAME, COMMPLAN, SHARED, COALIT, HORZ_VERT, AUDIT_NBRH, MIDDLE_SCH, MS_GRADE, ES_GRADE, Category, SOURCE)) %>%
+  mutate(top_1 =  SALEPRICE > quantile(SALEPRICE, .99),
+         price_diff = SALEPRICE - LANDVAL3, 
+         price_ratio = SALEPRICE/LANDVAL3 * 100,
+         vacant_dummy = PRPCD_DESC == "VACANT LAND",
+         llc_flag = grepl("LLC", OWNER1),
+         proud_flag =  grepl("PROUD", OWNER1),
+         trust_flag = grepl("TRUST", OWNER1)) %>%
+  mutate(arms_length = price_ratio > 20) #%>%
+  #recode(MKTVALYR, "09/27/17" = "2017")
+
+test2 <- SFR %>%
+    as.Date(MKTVALYR, saledate)
+# check if saledate is the same year as market year
+
+# looking obs by obs
+view <- test1 %>%
+  filter(trust_flag == TRUE)
+
+# removing observations 
+dat1 <- test1 %>% #27,200
+  filter(top_1 == FALSE, #26,931
+         vacant_dummy == FALSE, #26,095
+         arms_length == TRUE, #25,535
+         proud_flag == FALSE, #35,520
+         #trust_flag == FALSE -- these might be ones to take out on a case by case basis
+  )
+
+
+ggplot(test1, aes(x = SALEPRICE, y = TOTALVAL3)) +
+  geom_line() 
+
+summary(test1$top_1)
+summary(test1$price_diff)
+summary(test1$price_ratio)
+summary(test1$vacant_dummy)
+summary(test1$arms_length)
+summary(test1$proud_flag)
+summary(test1$trust_flag)
+
+
+## QUESTIONS
+## Does the order I filter in matter? If I pipe I'll get a different answer?
+## What's up with 322-336 WI/ SW 3RD AVE? 215 sqft and sold for 3mil
+  ## might be smart to have a $ per sqft dummy as well
+## Can i round yearbuilt even though its an average?
+#
+## TASKS
+## clean MKTVALYR3 so that all values have same format
+## go through trust flag one by one and remove
+## take out observation with string LLC and then get top 1%
+## Year built make 9999 NA
+## remove props with small totalarea -- some are like 200 sqft
+## remove building type as garage?
+## check dates are in order
+
+# Compare SALEPRICE to TOTALVAL3 --- 
+# note that this is the value of land + building
+# MKTVALYR3 can take on values 09/27/17, 2017, or 2018
+```
+
+Here, we created several variables that will help us determine what a reasonable observation should be for a single-family residential property. 
+
+First we removed observations that were actually vacant properties. These properties were tagged as "Vacant Land" in the taxlot data. We removed 869 vacant properties, or 3%, from our dataset.
+
+We found the difference between what we consider the most recent assessed value of the property and the sale price. In a perfect market (?), the sale price should be equal to the assessed value. However, due to factors such as imperfect information, sale price can be much higher or lower than the assessed value. Sale price is much higher than assessed value in situations where ____. Conversely, sale price is much lower than assessed value in transactions that are not considered "arms-length". Arms-length transactions are assumed to have been completed in the market, and with market forces acting upon both the buyer and the seller. For example, if a homeowner sold their property at a discount to a family member, there is an outside influence on the transaction (the relationship between buyer and seller) that affects the sale price. Arms-length transactions are more of a concept than a strict cut-off, so we were able to be flexible with how we applied the definition to our dataset.
+
+We chose to assign the property of an "arms-length transaction" to those properties whose sale price-to-assessed value ratio was at least 20%. In other words, we kept observations whose sale price was at most 20% lower than the assessed value. Our reasoning for this was to allow some flexibility with regard to homeowners with less information. Ultimately, this led to eliminating 528 observations, or 2% of our total data. 
+
+While the above process cleaned the bottom half of our data where sale price was too low, we still worried about including properties that sold for too high a price. To combat this, we eliminated the top 1% of observations with the highest sale prices. These properties were often owned by large investment or real estate firms who do not operate in the same market as the average homeowner (NOTE this is only applicable for SFR). Another reason for an inordinately high sale price is recording error. The top 1% is made up of 269 observations with an average sale price of _____. 
+
+Removing the most expensive properties helps combat including real estate company transactions, there are also myriad "land trusts" in Portland that hold land. TALK MORE ABOUT THIS!!!!!!!!!! A key land trust is known as "Proud Ground". TALK TALK TALK. We eliminated properties owned by Proud Ground (italicize?). Many of the Proud Ground properties were vacant. Eliminated 18 observations. 
+
+To conclude, we cleaned the data using four parameters: vacant properties, the top 1% of observations by sale price, observations whose sale price was less than 20% of its assessed value, and properties owned by the land trust "Proud Ground". These checks eliminated 1,680 unique observations, or 6% of the original dataset. 
+
+LLC stands for "Limited Liability Company" and is a type of company 
+
+### Exploration
+
+```{r}
+
+# A Look at the Dataset
+
+summary(dat1) # notes in thesis notebook
+
+# Correlation -- Scatterplots
+controls <- dat1 %>%
+  select(price_diff, pct_canopy_cov, taxlot_area, yearbuilt, totalsqft, dist_ugb, dist_cityhall, percent_vacant, CN_score, 
+         SALEPRICE)
+nm <- names(controls)
+
+for (i in seq_along(nm)) {
+  print(names(controls[i]))
+  print(ggplot(controls, aes_string(y = nm[length(nm)], x = nm[i])) + 
+    geom_point(alpha = 0.1) +
+    geom_smooth())
+}
+
+
+ggplot(dat1, aes(y = SALEPRICE, x = TOTALVAL3)) + 
+    geom_point()
+
+ggplot(dat1, aes(y = log(SALEPRICE), x = taxlot_area)) + 
+    geom_point()
+
+# Outliers -- Box Plots
+# best for discrete x
+
+for (i in seq_along(nm)) {
+  print(names(controls[i]))
+  print(ggplot(controls, aes_string(y = nm[length(nm)], x = nm[i])) + 
+    geom_point(alpha = 0.1))
+}
+
+# Distribution of Constraints -- Density Plots
+# Now to check the linearity of the variables it is a good practice to plot distribution graph and look for skewness of features. Kernel density estimate (kde) is a quite useful tool for plotting the shape of a distribution.
+
+for (i in seq_along(nm)) {
+  print(names(controls[i]))
+  print(ggplot(controls, aes_string(x = nm[i])) + 
+    geom_histogram(bins = 50))
+}
+
+
+```
+
+SALE PRICE -- nicely right skewed with a peak around 400,000
+
+Fireplaces -- having 2 fireplaces could tease out some info about median level houses
+
+Full Baths -- as number of full baths increases, sale price increases. 
+
+Taxlot Area -- a couple of outliers **i need to excise**. no trend with just sale price, need to try log sale price. **not sure how to interpret. ** right skewed but kinda ugly
+
+Percent Canopy Cover -- useless blob. There's a concentration of data less than 50% canopy cover, but that might just be science. **not sure how to interpret. **
+extremely right skewed
+
+Price Difference -- perfectly linear, beautiful, im gonna cry. As the gap between sale price and assessed value becomes larger, sale price becomes larger. tells you absolutely nothing. more right skewed
+
+Total Value Yr 3 -- roughly linear with a steep positive slope. 
+
+**Year Built** -- not distinct, but older and newer houses tend to be more expensive
+
+Total Sqft -- sorta linear, right skewed
+
+**Distance to City Hall** -- super cool negative exponential trend!!!!! I'M SO EXCITED. As distance increases, sale price decreases at a decreasing rate. most people like 15,000-25,000 units (?) away from city centre
+
+Percent Vacant -- nothing, surprisingly, weird peak at 100%
+
+**Complete Neighborhoods Score** -- kind of an exponential? **need help** left skewed
+
+Distance to UGB -- most people live 1000-3000 units (?) away from the UGB
+
+
+A Look at the Dataset
+
+number of rows, column, type of each control (struc, neighbor, etc), number of constraints, etc
+edited: 3/5 12:07am
+The cleaned dataset has
+look at class to make sure everything's right
+null/missing values vs zeros
+means and medians, max and min for each var
+
+
+
+### Regressions
+
+```{r}
+
+# Make a string of constraints and percent canopy names called "con_names"
+clean <- SFR %>%
+  select(contains("con"), contains("pct")) %>%
+  select(-c("CONCRETE", "FIN SECOND", "PAVING/CONCRETE ONLY", "UNF SECOND")) 
+con_names <- names(clean)
+con_names <- paste(con_names, collapse = " + ")
+
+
+
+# BOX-COX (LINEAR) REGRESSION
+
+
+
+
+
+
+
+# LINEAR REGRESSION
+
+# pre-analysis formula
+sfr_lin = formula(paste0("SALEPRICE ~ 
+                             f_baths + h_baths + n_fireplaces + yearbuilt + totalsqft + I(totalsqft^2) + taxlot_area + FLOORS + surfelev + percent_vacant + dist_cityhall + HIGH_SCH + MapLabel + CN_score + dist_ugb + ", con_names))
+
+# regression
+sfr_mod_linear <- lm(sfr_lin, dat1)
+summary(sfr_mod_linear)
+
+
+
+
+
+
+
+
+# SEMI-LOG REGRESSION
+
+# pre-analysis formula
+sfr_log = formula(paste0("I(log(SALEPRICE)) ~ 
+                             f_baths + h_baths + n_fireplaces + yearbuilt + totalsqft + I(totalsqft^2) + taxlot_area + FLOORS + surfelev + percent_vacant + dist_cityhall + HIGH_SCH + MapLabel + CN_score + dist_ugb + ", con_names))
+
+# regression
+sfr_mod_log <- lm(sfr_log, dat1)
+summary(sfr_mod_log)
+
+
+# # QUESTIONS
+# # could switch zip code and neighborhood out, or take our county altogether
+# # saledate?
+# # high school or elementary school?
+# # is there a baths combined var?
+# # turn year built into age for better interpretation?
+# # units of surfelev? "Average of the average surface elevation (above NAVD88 datum) of the land beneath and across all buildling footprints in feet"
+#   
+# # TASKS
+# # check all variables for necessary transformations
+# # combine GARAGE
+# # create CAPACITY
+# # create OVERSIZED LOT DUMMY
+# # combine BASEMENT
+# # combine ATTIC
+# # SAT? Student exp?
+# # transform zone
+
+
+# # Create variables
+# i <- y ~ x
+# j <- y ~ x + x1
+# k <- y ~ x + x1 + x2
+# 
+# # Concatentate
+# formulae <- list(as.formula(i),as.formula(j),as.formula(k))
+```
+
+
+### Diagnostics
+
+```{r}
+
+# summary
+
+# p-value
+
+# t-value
+
+# R^2 and Adj R^2
+
+# SE
+
+# F-Stat
+
+# AIC and BIC
+
+
+```
+
+
+### Cross-Validation and Sensitivity Analysis
+
+```{r}
+Cross-validation. By splitting the data into multiple parts, we can check if an analysis (like a fitted model) based on one part of the data generalizes to another part of the data as well. Cross-validation is generally inappropriate, though, if there are correlations within the data, e.g. with panel data. Hence other methods of validation sometimes need to be used. For more on this topic, see statistical model validation.
+
+Sensitivity analysis. A procedure to study the behavior of a system or model when global parameters are (systematically) varied. One way to do that is via bootstrapping.
+
+```
+
+
+
+
