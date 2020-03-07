@@ -236,44 +236,43 @@ print(paste0("nbhd Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$F
 ### Percent Vacant Properties within Half Mile *correction-200 ft*
 
 ```{r}
-# selects property id's and vacancy variable
+# explicitly define the missing values in a factor level
+taxlots$STATE_ID <- fct_explicit_na(taxlots$STATE_ID)
+
+# selects variables
+# df of unique obs -- 197,131 obs
+vacancy_pruned <- taxlots %>%
+  select(STATE_ID, PRPCD_DESC, Shape) %>%
+  group_by(STATE_ID) %>%
+  mutate(n = n()) %>%
+  filter(n == 1) 
+
+# create vacant column
+vacancy_pruned$VACANT <- vacancy_pruned$PRPCD_DESC == "VACANT LAND"
+
+# creates a buffer called buffer_dist
+# adds this buffer as an additional geometry to the main dataset
 # 1 ft = 0.3048 meters
 conv <- 0.3048
 ft <- 200
 buffer_dist <- ft * conv
 
-vacancy <- capacity %>%
-  select(STATE_ID, IS_VACANT, Shape) %>%
-  rename(ShapeCapacity = Shape)
-
-vacancy_pruned <- vacancy %>%
-  group_by(STATE_ID) %>%
-  slice(1) %>%
-  mutate(VACANT=recode(IS_VACANT, 
-                       "True" = 1,
-                       ` `= 0)) %>%
-  select(-IS_VACANT)
-
-
-# creates a buffer called buffer_dist (measured in meters)
-# adds this buffer as an additional geometry to the main dataset
-buffy <- fugly %>%
+# creates buffer of size `buffer_dist` around buffy
+buffy <- taxlots_pruned %>%
   rename(ShapeBuffy = Shape) %>%
   st_buffer(buffer_dist)
 
 # join buffy and vacancy_pruned 
-vacant_join_buffy <- st_join(buffy, vacancy_pruned, left = TRUE) # returns all buffy
+vacant_join_buffy <- st_join(buffy, vacancy_pruned, left = TRUE)
 
 # calculates percent vacant houses in buffer
+# taking out na's when calcing percent vacant
 vacant_var <- vacant_join_buffy %>%
-  st_drop_geometry() %>%
   arrange(STATE_ID.x) %>%
   group_by(STATE_ID.x) %>%
-  rename(STATE_ID = STATE_ID.x) %>%
   mutate(n = n()) %>%
-  mutate(VACANT = recode(VACANT, 
-                       "1" = 1,
-                       "0" = 0)) %>%
+  mutate(VACANT = VACANT*1) %>%
+  filter(!is.na(VACANT)) %>% 
   summarize(percent_vacant = sum(VACANT)/n[1])
 
 # join to dataframe 
