@@ -674,6 +674,22 @@ print(paste0("constraints Join: ", as.character(sum(data.frame(table(fugly$STATE
 
 ```
 
+### conFld100 - Building Footprint
+
+```{r}
+# read intersected data (done in GIS using FEMA map + footprints)
+foot_flood <- st_read(here("DATA", "ft_fld.gdb"), layer = "ft_floodplain")
+
+ftfld_ids <- foot_flood %>%
+  filter(STATE_ID %in% stateids) %>%
+  pull(STATE_ID)
+
+fugly %<>%
+  mutate(conFld100_ft = ifelse(STATE_ID %in% ftfld_ids, 1, 0))
+
+# this new variable drops 20 properties from the original conFld100
+```
+
 ### Partial Constraints!
 
 ```{r}
@@ -721,15 +737,24 @@ fugly <- left_join(fugly, partial, by = "STATE_ID")
 
 ```{r}
 # Load zoning shape files
-zoningaug2014 <- st_read("./DATA/Zoning_History/Zoning_2014_Aug_pdx.shp")
-zoningfeb2014 <- st_read("./DATA/Zoning_History/Zoning_2014_Feb_pdx.shp")
-zoningaug2015 <- st_read("./DATA/Zoning_History/Zoning_2015_Aug_pdx.shp")
-zoningfeb2015 <- st_read("./DATA/Zoning_History/Zoning_2015_Feb_pdx.shp")
-zoningaug2016 <- st_read("./DATA/Zoning_History/Zoning_2016_Aug_pdx.shp")
-zoningfeb2016 <- st_read("./DATA/Zoning_History/Zoning_2015_Feb_pdx.shp")
-zoningaug2017 <- st_read("./DATA/Zoning_History/Zoning_2017_Aug_metro.shp")
-zoningaug2018 <- st_read("./DATA/Zoning_History/Zoning_2018_Aug_pdx.shp")
-zoningfeb2018 <- st_read("./DATA/Zoning_History/Zoning_2018_Feb_pdx.shp")
+zoningaug2014 <- st_read(here("DATA", "Zoning_History",
+                              "Zoning_2014_Aug_pdx.shp"))
+zoningfeb2014 <- st_read(here("DATA", "Zoning_History",
+                              "Zoning_2014_Feb_pdx.shp"))
+zoningaug2015 <- st_read(here("DATA", "Zoning_History",
+                              "Zoning_2015_Aug_pdx.shp"))
+zoningfeb2015 <- st_read(here("DATA", "Zoning_History",
+                              "Zoning_2015_Feb_pdx.shp"))
+zoningaug2016 <- st_read(here("DATA", "Zoning_History",
+                              "Zoning_2016_Aug_pdx.shp"))
+zoningfeb2016 <- st_read(here("DATA", "Zoning_History",
+                              "Zoning_2015_Feb_pdx.shp")
+zoningaug2017 <- st_read(here("DATA", "Zoning_History",
+                              "Zoning_2017_Aug_metro.shp")
+zoningaug2018 <- st_read(here("DATA", "Zoning_History",
+                              "Zoning_2018_Aug_pdx.shp"))
+zoningfeb2018 <- st_read(here("DATA", "Zoning_History",
+                              "Zoning_2018_Feb_pdx.shp")
 
 colnames(zoningaug2014) <- paste0(colnames(zoningaug2014), "_aug2014")
 st_geometry(zoningaug2014) <- "geometry_aug2014"
@@ -792,7 +817,7 @@ zones_over_time %<>%
                                    sale_zone))
 
 # Load crosswalk from Nick sent via email 02/04
-crosswalk <- read_xlsx("./DATA/zoning_crosswalk.xlsx")
+crosswalk <- read_xlsx(here("DATA", "zoning_crosswalk.xlsx"))
 crosswalk %<>%
   rename(sale_zone = `Base Zone`)
 
@@ -812,6 +837,5 @@ zones_over_time %<>%
 
 fugly <- left_join(fugly, zones_over_time, by = "STATE_ID")
 print(paste0("zone Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$Freq > 1))))
-
 ```
 
