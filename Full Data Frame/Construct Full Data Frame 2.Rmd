@@ -12,12 +12,13 @@ library(stringr)
 library(data.table)
 library(magrittr)
 library(readxl)
+library(here)
 
 datanames <- c("gisimpcop", "impsegcop", "gispropcop", "allpropcop", "segchar", "rollhist", "impseg", "salescop","school", "imps", "constraints", "rollhist_wide", "taxlots", "footprints")
 datanames
 
 # Set working directory
-setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
 ```
 
 
@@ -26,7 +27,7 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 ```{r}
 #----------------------
 # GDB sent 10/29 via email
-gdb <- "./DATA/data2.gdb"
+gdb <- here("DATA", "data2.gdb")
 
 capacity <- st_read(gdb, layer = "bli_development_capacity")
 impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
@@ -36,21 +37,21 @@ school <- st_read(gdb, layer = "school_attendance_areas")
 
 #----------------------
 # GDB sent 10/10 via USB
-gdb2 <- "./DATA/data1.gdb"
+gdb2 <- here("DATA", "data1.gdb")
 
 taxlots <- st_read(gdb2, "taxlots_20191010")
 footprints <- st_read(gdb2, "building_footprints_20191010")
 
 #----------------------
 # GDB sent 11/12 via email
-gdb3 <- "./DATA/data_20191112.gdb"
+gdb3 <- here("DATA", "data_20191112.gdb")
 
 bli_constraints <- st_read(gdb3, "bli_constraints_all")
 nbhd <- st_read(gdb3, "neighborhoods_no_overlap")
 
 #----------------------
 # GDB sent 11/22 via email
-gdb4 <- "./DATA/tree_canopy.gdb"
+gdb4 <- here("DATA", "tree_canopy.gdb")
 
 bli_constraints_v2 <- st_read(gdb4, "bli_constraints_v2_pts_run4")
 
@@ -61,13 +62,13 @@ ugb <- st_read("./DATA/ugb/ugb.shp")
 
 #----------------------
 # GDB sent 2/10 via email
-gdb5 <- "./DATA/canopy_20200210.gdb"
+gdb5 <- here("DATA", "canopy_20200210.gdb")
 
 canopy <- st_read(gdb5, "canopy_taxlot_intersect")
 
 #----------------------
 # GDB 2/11 from PortlandMaps
-walk_gdb <- "./DATA/Complete_Neighborhoods_Scoring_Surface"
+walk_gdb <- here("DATA", "Complete_Neighborhoods_Scoring_Surface")
 
 walk <- st_read(walk_gdb, 
            layer = "Complete_Neighborhoods_Scoring_Surface")
@@ -678,7 +679,8 @@ print(paste0("constraints Join: ", as.character(sum(data.frame(table(fugly$STATE
 
 ```{r}
 # Read
-intersectionz <- st_read("./DATA/constraint_layers.gdb", "Intersectionz")
+intersectionz <- st_read(here("DATA", "constraint_layers.gdb"),
+                         "Intersectionz")
 
 partial <- intersectionz %>%
   filter(STATE_ID %in% stateids) %>%
