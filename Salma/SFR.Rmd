@@ -9,20 +9,33 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ### Import Packages + Read in Data
 
-```{r}
+```{r, include = FALSE}
 library(tidyverse)
 library(magrittr)
 library(here)
 library(data.table)
+library(MASS)
+library(stargazer)
+library(broom)
+library(sjPlot)
+library(lubridate)
 
 # read in csv
 thesis_data <- read_csv(here("DATA","thesis-data.csv"))
 ```
 
+### Cheatsheet
+thesis_data <- raw data from csv into dataframe format
+
+SFR <- all data where proprty type is single family residential
+
+test1 <- creating flags for cleaning vars
+
+dat1 <- applying flags to trim dataset
 
 ### Create SFR Dataframe
 
-```{r}
+```{r, echo = FALSE}
 
 # Create Data Frames
 SFR <- thesis_data %>%
@@ -47,11 +60,18 @@ No observation repeat in any of the data frames acording to the unique IDs we ha
 
 ### Clean SFR Dataframe
 
-```{r}
+```{r, echo = FALSE}
 
-# create flags for things we want to omit
+#-------------------- BEGINNING RYAN CODE ------------------------
+
 test1 <- SFR %>%
-  select(-c(OWNER2, OWNER3, OWNERZIP, LEGAL_DESC, TAXCODE, PROP_CODE, LANDUSE, BLDGSQFT, BEDROOMS, MKTVALYR1, MKTVALYR2, LANDVAL1, LANDVAL2, BLDGVAL1, BLDGVAL2, TOTALVAL1, TOTALVAL2, ACC_STATUS, NAME, COMMPLAN, SHARED, COALIT, HORZ_VERT, AUDIT_NBRH, MIDDLE_SCH, MS_GRADE, ES_GRADE, Category, SOURCE)) %>%
+  dplyr::select(-c(OWNER2, OWNER3, OWNERZIP, 
+            MKTVALYR1, MKTVALYR2,
+            BLDGVAL1, BLDGVAL2,
+            LANDVAL1, LANDVAL2,  
+            TOTALVAL1, TOTALVAL2,
+            MS_GRADE, ES_GRADE,
+            LEGAL_DESC, TAXCODE, PROP_CODE, LANDUSE, BLDGSQFT, BEDROOMS, ACC_STATUS, NAME, COMMPLAN, SHARED, COALIT, HORZ_VERT, AUDIT_NBRH, MIDDLE_SCH,  Category, SOURCE, FRONTAGE, COUNTY, YEARBUILT, bldgtype)) %>%
   mutate(top_1 =  SALEPRICE > quantile(SALEPRICE, .99),
          price_diff = SALEPRICE - LANDVAL3, 
          price_ratio = SALEPRICE/LANDVAL3 * 100,
@@ -59,29 +79,69 @@ test1 <- SFR %>%
          llc_flag = grepl("LLC", OWNER1),
          proud_flag =  grepl("PROUD", OWNER1),
          trust_flag = grepl("TRUST", OWNER1)) %>%
-  mutate(arms_length = price_ratio > 20) #%>%
-  #recode(MKTVALYR, "09/27/17" = "2017")
+  mutate(arms_length = price_ratio > 20,
+         na_if(yearbuilt, 0))
 
-test2 <- SFR %>%
-    as.Date(MKTVALYR, saledate)
-# check if saledate is the same year as market year
+# switch the NAs in the constraints to 0s
+to0 <- function(x){ifelse(is.na(x), 0, x)}
 
-# looking obs by obs
-view <- test1 %>%
-  filter(trust_flag == TRUE)
+#------------------------- END RYAN CODE ----------------------------
 
 # removing observations 
 dat1 <- test1 %>% #27,200
   filter(top_1 == FALSE, #26,931
          vacant_dummy == FALSE, #26,095
          arms_length == TRUE, #25,535
-         proud_flag == FALSE, #35,520
+         proud_flag == FALSE, #25,520
          #trust_flag == FALSE -- these might be ones to take out on a case by case basis
   )
 
+#-------------------- BEGINNING RYAN CODE ------------------------
 
-ggplot(test1, aes(x = SALEPRICE, y = TOTALVAL3)) +
-  geom_line() 
+#garage sqft
+gar_sqft_sum <- dat1 %>%
+  dplyr::select(matches("gar")) %>%
+  rowSums()
+
+# attic sqft
+attic_sqft_sum <- dat1 %>%
+  dplyr::select(matches("attic")) %>%
+  rowSums()
+
+# basement sqft
+bsmt_sqft_sum <- dat1 %>%
+  dplyr::select(matches("bsmt")) %>%
+  dplyr::select(-c("BSMT PARKING","BSMT GAR")) %>%
+  rowSums()
+  
+dat1 %<>%
+  mutate(garage_sqft = gar_sqft_sum,
+         garage_dum = garage_sqft > 0,
+         attic_sqft = attic_sqft_sum,
+         attic_dum = attic_sqft > 0,
+         bsmt_sqft = bsmt_sqft_sum,
+         bsmt_dum = bsmt_sqft > 0,
+         saledate = mdy(saledate), 
+         year_sold = year(saledate))
+
+#------------------------- END RYAN CODE ----------------------------
+
+
+  #%>%
+  #recode(MKTVALYR, "09/27/17" = "2017")
+
+
+# test2 <- SFR %>%
+#     as.Date(MKTVALYR, saledate)
+# check if saledate is the same year as market year
+
+
+ # dat1 %<>% filter(yearbuilt == 1008.000)
+# deal with this
+
+
+ggplot(test1, aes(x = SALEPRICE, y = LANDVAL3)) +
+  geom_point() 
 
 summary(test1$top_1)
 summary(test1$price_diff)
@@ -96,7 +156,6 @@ summary(test1$trust_flag)
 ## Does the order I filter in matter? If I pipe I'll get a different answer?
 ## What's up with 322-336 WI/ SW 3RD AVE? 215 sqft and sold for 3mil
   ## might be smart to have a $ per sqft dummy as well
-## Can i round yearbuilt even though its an average?
 #
 ## TASKS
 ## clean MKTVALYR3 so that all values have same format
@@ -104,7 +163,7 @@ summary(test1$trust_flag)
 ## take out observation with string LLC and then get top 1%
 ## Year built make 9999 NA
 ## remove props with small totalarea -- some are like 200 sqft
-## remove building type as garage?
+## remove building type as garage? YES
 ## check dates are in order
 
 # Compare SALEPRICE to TOTALVAL3 --- 
@@ -112,35 +171,25 @@ summary(test1$trust_flag)
 # MKTVALYR3 can take on values 09/27/17, 2017, or 2018
 ```
 
-Here, we created several variables that will help us determine what a reasonable observation should be for a single-family residential property. 
-
-First we removed observations that were actually vacant properties. These properties were tagged as "Vacant Land" in the taxlot data. We removed 869 vacant properties, or 3%, from our dataset.
-
-We found the difference between what we consider the most recent assessed value of the property and the sale price. In a perfect market (?), the sale price should be equal to the assessed value. However, due to factors such as imperfect information, sale price can be much higher or lower than the assessed value. Sale price is much higher than assessed value in situations where ____. Conversely, sale price is much lower than assessed value in transactions that are not considered "arms-length". Arms-length transactions are assumed to have been completed in the market, and with market forces acting upon both the buyer and the seller. For example, if a homeowner sold their property at a discount to a family member, there is an outside influence on the transaction (the relationship between buyer and seller) that affects the sale price. Arms-length transactions are more of a concept than a strict cut-off, so we were able to be flexible with how we applied the definition to our dataset.
-
-We chose to assign the property of an "arms-length transaction" to those properties whose sale price-to-assessed value ratio was at least 20%. In other words, we kept observations whose sale price was at most 20% lower than the assessed value. Our reasoning for this was to allow some flexibility with regard to homeowners with less information. Ultimately, this led to eliminating 528 observations, or 2% of our total data. 
-
-While the above process cleaned the bottom half of our data where sale price was too low, we still worried about including properties that sold for too high a price. To combat this, we eliminated the top 1% of observations with the highest sale prices. These properties were often owned by large investment or real estate firms who do not operate in the same market as the average homeowner (NOTE this is only applicable for SFR). Another reason for an inordinately high sale price is recording error. The top 1% is made up of 269 observations with an average sale price of _____. 
-
-Removing the most expensive properties helps combat including real estate company transactions, there are also myriad "land trusts" in Portland that hold land. TALK MORE ABOUT THIS!!!!!!!!!! A key land trust is known as "Proud Ground". TALK TALK TALK. We eliminated properties owned by Proud Ground (italicize?). Many of the Proud Ground properties were vacant. Eliminated 18 observations. 
-
-To conclude, we cleaned the data using four parameters: vacant properties, the top 1% of observations by sale price, observations whose sale price was less than 20% of its assessed value, and properties owned by the land trust "Proud Ground". These checks eliminated 1,680 unique observations, or 6% of the original dataset. 
-
-LLC stands for "Limited Liability Company" and is a type of company 
 
 ### Exploration
 
-```{r}
+```{r, echo = FALSE}
 
 # A Look at the Dataset
 
-summary(dat1) # notes in thesis notebook
+salma <- summary(dat1) # notes in thesis notebook
 
 # Correlation -- Scatterplots
+
 controls <- dat1 %>%
-  select(price_diff, pct_canopy_cov, taxlot_area, yearbuilt, totalsqft, dist_ugb, dist_cityhall, percent_vacant, CN_score, 
+  dplyr::select(price_diff, pct_canopy_cov, taxlot_area, yearbuilt, totalsqft, dist_ugb, dist_cityhall, percent_vacant, CN_score, 
          SALEPRICE)
 nm <- names(controls)
+
+correlation <- cor(controls, use = "pairwise.complete.obs")
+#takes only obs for which both vars are not NA
+
 
 for (i in seq_along(nm)) {
   print(names(controls[i]))
@@ -162,7 +211,7 @@ ggplot(dat1, aes(y = log(SALEPRICE), x = taxlot_area)) +
 for (i in seq_along(nm)) {
   print(names(controls[i]))
   print(ggplot(controls, aes_string(y = nm[length(nm)], x = nm[i])) + 
-    geom_point(alpha = 0.1))
+    geom_boxplot(alpha = 0.1))
 }
 
 # Distribution of Constraints -- Density Plots
@@ -208,8 +257,10 @@ Distance to UGB -- most people live 1000-3000 units (?) away from the UGB
 A Look at the Dataset
 
 number of rows, column, type of each control (struc, neighbor, etc), number of constraints, etc
+
 edited: 3/5 12:07am
 The cleaned dataset has
+
 look at class to make sure everything's right
 null/missing values vs zeros
 means and medians, max and min for each var
@@ -218,22 +269,20 @@ means and medians, max and min for each var
 
 ### Regressions
 
-```{r}
+```{r, echo = FALSE}
 
 # Make a string of constraints and percent canopy names called "con_names"
 clean <- SFR %>%
-  select(contains("con"), contains("pct")) %>%
-  select(-c("CONCRETE", "FIN SECOND", "PAVING/CONCRETE ONLY", "UNF SECOND")) 
+  dplyr::select(contains("con"), contains("pct")) %>%
+  dplyr::select(-c("CONCRETE", "FIN SECOND", "PAVING/CONCRETE ONLY", "UNF SECOND", "conFldway", "pct_conFldway")) 
 con_names <- names(clean)
 con_names <- paste(con_names, collapse = " + ")
 
-
-
-# BOX-COX (LINEAR) REGRESSION
-
-
-
-
+# mutate sale price transformations
+dat1 %<>% 
+  mutate(SALEPRICEbc = SALEPRICE^.46,
+         SALEPRICElog = log(SALEPRICE),
+         SALEPRICEsqrt = SALEPRICE^.5)
 
 
 
@@ -246,30 +295,46 @@ sfr_lin = formula(paste0("SALEPRICE ~
 # regression
 sfr_mod_linear <- lm(sfr_lin, dat1)
 summary(sfr_mod_linear)
+#not plotting observations with leverage one: 5135, 11888, 14466???
 
 
+# BOX-COX (LINEAR) REGRESSION
 
+plot(sfr_mod_linear)
+bc = boxcox(sfr_mod_linear, lamba = seq(-3, 3, 1))
+best_lam = bc$x[which(bc$y == max(bc$y))]
 
+# pre-analysis formula
+sfr_bc = formula(paste0("SALEPRICEbc ~ 
+                             f_baths + h_baths + n_fireplaces + yearbuilt + totalsqft + I(totalsqft^2) + taxlot_area + FLOORS + surfelev + percent_vacant + dist_cityhall + HIGH_SCH + MapLabel + CN_score + dist_ugb + ", con_names))
+
+# regression
+sfr_mod_bc <- lm(sfr_bc, dat1)
+summary(sfr_mod_bc)
+plot(sfr_mod_bc)
 
 
 
 
 # SEMI-LOG REGRESSION
 
-# pre-analysis formula
-sfr_log = formula(paste0("I(log(SALEPRICE)) ~ 
+#pre-analysis formula
+sfr_log = formula(paste0("SALEPRICElog ~ 
                              f_baths + h_baths + n_fireplaces + yearbuilt + totalsqft + I(totalsqft^2) + taxlot_area + FLOORS + surfelev + percent_vacant + dist_cityhall + HIGH_SCH + MapLabel + CN_score + dist_ugb + ", con_names))
 
 # regression
 sfr_mod_log <- lm(sfr_log, dat1)
 summary(sfr_mod_log)
+plot(sfr_mod_log)
+
+
+
 
 
 # # QUESTIONS
-# # could switch zip code and neighborhood out, or take our county altogether
+# # could switch zip code and neighborhood out, or take out county altogether
 # # saledate?
 # # high school or elementary school?
-# # is there a baths combined var?
 # # turn year built into age for better interpretation?
 # # units of surfelev? "Average of the average surface elevation (above NAVD88 datum) of the land beneath and across all buildling footprints in feet"
 #   
@@ -281,22 +346,54 @@ summary(sfr_mod_log)
 # # combine BASEMENT
 # # combine ATTIC
 # # SAT? Student exp?
-# # transform zone
+# # transform zone????????????????
 
-
-# # Create variables
-# i <- y ~ x
-# j <- y ~ x + x1
-# k <- y ~ x + x1 + x2
-# 
-# # Concatentate
-# formulae <- list(as.formula(i),as.formula(j),as.formula(k))
 ```
+a little off at the edges
+normality of errors is really bad, skewing all over the place
+homoskedasticity is really bad too, should be a straight line but is not
+residuals?? unsure how to interpret, theres a little red line
+
+### Output
+
+```{r}
+stargazer(sfr_mod_linear, sfr_mod_log, sfr_mod_bc, title="Results", align=TRUE)
+
+
+----
+  
+  
+sfr_mod_linear <- tidy(lm(sfr_lin, dat1))
+sfr_mod_log <- tidy(lm(sfr_log, dat1))
+sfr_mod_bc <- tidy(lm(sfr_bc, dat1))
+
+all_models <- rbind_list(
+    sfr_mod_linear %>% mutate(model = 1),
+    sfr_mod_log %>% mutate(model = 2),
+    sfr_mod_bc %>% mutate(model = 3))
+
+all_models
+
+ols_table <- all_models %>%
+    select(-statistic, -p.value) %>%
+    mutate_each(funs(round(., 2)), -term) %>% 
+    gather(key, value, estimate:std.error) %>%
+    spread(model, value) 
+
+ols_table
+
+
+------------
+  
+tab_model(sfr_mod_linear, sfr_mod_log, sfr_mod_bc, file="try_1.doc")
+
+```
+
 
 
 ### Diagnostics
 
-```{r}
+```{r, include = FALSE}
 
 # summary
 
@@ -318,13 +415,45 @@ summary(sfr_mod_log)
 
 ### Cross-Validation and Sensitivity Analysis
 
-```{r}
-Cross-validation. By splitting the data into multiple parts, we can check if an analysis (like a fitted model) based on one part of the data generalizes to another part of the data as well. Cross-validation is generally inappropriate, though, if there are correlations within the data, e.g. with panel data. Hence other methods of validation sometimes need to be used. For more on this topic, see statistical model validation.
-
-Sensitivity analysis. A procedure to study the behavior of a system or model when global parameters are (systematically) varied. One way to do that is via bootstrapping.
+```{r, include = FALSE}
+# Cross-validation. By splitting the data into multiple parts, we can check if an analysis (like a fitted model) based on one part of the data generalizes to another part of the data as well. Cross-validation is generally inappropriate, though, if there are correlations within the data, e.g. with panel data. Hence other methods of validation sometimes need to be used. For more on this topic, see statistical model validation.
+# 
+# Sensitivity analysis. A procedure to study the behavior of a system or model when global parameters are (systematically) varied. One way to do that is via bootstrapping.
 
 ```
 
+
+```{r}
+
+ass_val_zero <- SFR %>%
+  filter(TOTALVAL3 == 0)
+
+store <- dat1$SALEDATE
+class(store)
+unique <- unique(store)
+(sort(unique))
+
+dat2 <- dat1 %>%
+  mutate(SITEZIP = as.factor(SITEZIP),
+         MKTVALYR3 = case_when( MKTVALYR3 == "09/27/17" ~ "2017",
+                                TRUE ~ "2018"),
+         MKTVALYR3 = as.numeric(MKTVALYR3),
+         SALEDATE = as.Date(SALEDATE, "%m/%d/%Y")
+         )
+
+
+filter(dat1, STATE_ID == "1S2E02AD  101")
+
+# prpcd-desc-- where is vacant land?
+# is there a problem with year built being a decimal?
+```
+
+
+
+```{r}
+noncon <- thesis_data %>%
+  filter(prop_type == "Non-conforming")
+```
 
 
 

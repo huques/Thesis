@@ -57,8 +57,9 @@ bli_constraints_v2 <- st_read(gdb4, "bli_constraints_v2_pts_run4")
 
 #----------------------
 # SHP sent 11/25 via email
-ugb <- st_read("./DATA/ugb/ugb.shp") 
 
+ugb <- st_read(here("DATA", "ugb",
+                              "ugb.shp"))
 
 #----------------------
 # GDB sent 2/10 via email
@@ -111,7 +112,7 @@ propids <- taxlots_pruned %>%
 # Transform crs from 4326 to 2913
 walk %<>% 
   st_transform(2913) %>%
-  select(CN_score) 
+  dplyr::select(CN_score) 
 # dropped all other variables (like shape area) to avoid
 # renaming things and later confusion
 # Join!
@@ -242,7 +243,7 @@ taxlots$STATE_ID <- fct_explicit_na(taxlots$STATE_ID)
 # selects variables
 # df of unique obs -- 197,131 obs
 vacancy_pruned <- taxlots %>%
-  select(STATE_ID, PRPCD_DESC, Shape) %>%
+  dplyr::select(STATE_ID, PRPCD_DESC, Shape) %>%
   group_by(STATE_ID) %>%
   mutate(n = n()) %>%
   filter(n == 1) 
@@ -273,11 +274,13 @@ vacant_var <- vacant_join_buffy %>%
   mutate(n = n()) %>%
   mutate(VACANT = VACANT*1) %>%
   filter(!is.na(VACANT)) %>% 
-  summarize(percent_vacant = sum(VACANT)/n[1])
+  summarize(percent_vacant = sum(VACANT)/n[1]) %>%
+  rename(STATE_ID = STATE_ID.x) %>%
+  st_drop_geometry()
 
 # join to dataframe 
 fugly <- left_join(fugly, vacant_var, by = "STATE_ID")
-print(paste0("vacant Join: ", as.character(sum(data.frame(table(vacancy$STATE_ID))$Freq > 1))))
+print(paste0("vacant Join: ", as.character(sum(data.frame(table(fugly$STATE_ID.x))$Freq > 1))))
 
 ```
 
@@ -434,7 +437,7 @@ Now we will try merging/collapsing footprints on this smaller subset of the enti
 ```{R}
 # grab only the footprints associated with stateids in our sample
 ftprints_pruned <- footprints %>%
-  filter(STATE_ID %in% stateids)
+  filter(STATE_ID %in% stateids) 
 
 # Make collapsed footprints dataset called `allfeet`
 ftprints_pruned %<>% 
@@ -600,10 +603,10 @@ Not specified based on number of ADU's on a property.
 ```{r}
 # column (267352 obs) with unique PropID and ADU dummy
 ADU <- gisimpcop %>%
-  select(ImpType, PropID) %>%
+  dplyr::select(ImpType, PropID) %>%
   count(PropID) %>%
   mutate(ADUdummy = ifelse(n == 1, "0", "1")) %>%
-  select(PropID, ADUdummy) %>%
+  dplyr::select(PropID, ADUdummy) %>%
   rename(PROPERTYID = PropID)
 
 ADU <- ADU[-c(1),]
@@ -623,7 +626,7 @@ print(paste0("ADU Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$Fr
 # covered by canopy" variable
 taxlot_areas <- fugly %>%
   rename(taxlot_area = Shape_Area) %>%
-  select(STATE_ID, taxlot_area) %>% 
+  dplyr::select(STATE_ID, taxlot_area) %>% 
   st_drop_geometry()
 
 # This chunk collapses canopy by STATE_ID and generates canopy coverage ratios
@@ -653,7 +656,7 @@ setToOne <- function(x){ifelse(x > 1, 1, x)}
 
 # Change <NA>, "True" instances to 0, 1 for all 204,000+ properties
 non_id_constraints <- bli_constraints_v2 %>%
-  select(contains("con")) %>%
+  dplyr::select(contains("con")) %>%
   mutate_if(is.factor, genDummy)
 
 st_geometry(non_id_constraints) <- st_geometry(bli_constraints)
@@ -666,7 +669,7 @@ firstjoin <- st_join(st_centroid(taxlots_pruned), non_id_constraints, left = TRU
 # property. Here, we're not worrying about partial constraints yet.
 dumdum_constraints <- firstjoin %>%
   group_by(STATE_ID) %>%
-  select(contains("con")) %>% 
+  dplyr::select(contains("con")) %>% 
   st_drop_geometry() 
 
 fugly <- left_join(fugly, dumdum_constraints, by = "STATE_ID")
@@ -748,13 +751,13 @@ zoningfeb2015 <- st_read(here("DATA", "Zoning_History",
 zoningaug2016 <- st_read(here("DATA", "Zoning_History",
                               "Zoning_2016_Aug_pdx.shp"))
 zoningfeb2016 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2015_Feb_pdx.shp")
+                              "Zoning_2015_Feb_pdx.shp"))
 zoningaug2017 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2017_Aug_metro.shp")
+                              "Zoning_2017_Aug_metro.shp"))
 zoningaug2018 <- st_read(here("DATA", "Zoning_History",
                               "Zoning_2018_Aug_pdx.shp"))
 zoningfeb2018 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2018_Feb_pdx.shp")
+                              "Zoning_2018_Feb_pdx.shp"))
 
 colnames(zoningaug2014) <- paste0(colnames(zoningaug2014), "_aug2014")
 st_geometry(zoningaug2014) <- "geometry_aug2014"
@@ -796,10 +799,10 @@ df <- st_join(df, zoningaug2018)
 
 # Create new df with just the shorthand zoning variables across time
 zones_over_time <- df %>%
-  select(contains("ZONE_"), STATE_ID, saledate)%>%
-  select(-contains("TMP")) %>%
+  dplyr::select(contains("ZONE_"), STATE_ID, saledate)%>%
+  dplyr::select(-contains("TMP")) %>%
   #select(-contains("DESC")) %>%
-  select(-contains("CLASS"))
+  dplyr::select(-contains("CLASS"))
 
 zones_over_time %<>%
   dplyr::mutate(sale_zone = case_when(saledate >= as.Date("2014-02-01") & saledate < as.Date("2014-08-01") ~ ZONE_feb2014,
@@ -833,7 +836,7 @@ zones_over_time %<>%
                               sale_zone == "CO2" ~ "Mixed Use",
                           TRUE ~ prop_type)
   ) %>%
-  select(-saledate)
+  dplyr::select(-saledate)
 
 fugly <- left_join(fugly, zones_over_time, by = "STATE_ID")
 print(paste0("zone Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$Freq > 1))))
