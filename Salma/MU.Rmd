@@ -9,135 +9,142 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ### Import Packages + Read in Data
 
-```{r Import Packages}
+```{r, include = FALSE}
 library(tidyverse)
 library(magrittr)
 library(here)
+library(data.table)
+library(MASS)
+library(kableExtra)
+library(lubridate)
 
 # read in csv
-thesis_data <- read_csv(here("DATA","thesis-data.csv"))
+thesis_data <- read_csv(here::here("DATA","thesis-data.csv"))
 ```
 
 
-### Create + Clean MU dataframe
-
-```{r Create Data Frames}
-
-# Create Data Frame
+```{r}
+# Split Data
 MU <- thesis_data %>%
   filter(prop_type == "Mixed Use")
 
-# Check for duplicates one more time
-# All equal zero, meaning there are no duplicates of each of these variables
-# Means we can use any one of them as a way of IDing observations uniquely
-
-# state_id
-sum(data.frame(table(MU$STATE_ID))$Freq > 1) 
-
-# rno
-sum(data.frame(table(MU$RNO))$Freq > 1)  
-
-# property id
-sum(data.frame(table(MU$PROPERTYID))$Freq > 1) 
-
-# tlid
-sum(data.frame(table(MU$TLID))$Freq > 1) 
-
-# Questions
-# What to do with non-conforming? Look up on PDX Maps
-```
-
-MU data frame has 2,008 observations. 
-
-No observation repeat in any of the data frames acording to the unique IDs we have recorded for them. 
-
-### Clean the Full Data Frame 
-## (constructed in `Cleaning` and `Construct Full Data Frame 2`)
-
-```{r Clean}
-
-# create flags for things we want to omit
-test1 <- MU %>%
+# Clean MU Dataframe
+test2 <- MU %>%
+  dplyr::select(-c(OWNER2, OWNER3, OWNERZIP, 
+            MKTVALYR1, MKTVALYR2,
+            BLDGVAL1, BLDGVAL2,
+            LANDVAL1, LANDVAL2,  
+            TOTALVAL1, TOTALVAL2,
+            MS_GRADE, ES_GRADE,
+            LEGAL_DESC, TAXCODE, PROP_CODE, LANDUSE, BEDROOMS, ACC_STATUS, NAME, COMMPLAN, SHARED, COALIT, HORZ_VERT, AUDIT_NBRH, MIDDLE_SCH,  Category, SOURCE, FRONTAGE, COUNTY, YEARBUILT, bldgtype)) %>%
   mutate(top_1 =  SALEPRICE > quantile(SALEPRICE, .99),
+         MKTVALYR3 = case_when(MKTVALYR3 != 2018 ~ 2017, 
+                                         TRUE ~ 2018),
          price_diff = SALEPRICE - LANDVAL3, 
          price_ratio = SALEPRICE/LANDVAL3 * 100,
          vacant_dummy = PRPCD_DESC == "VACANT LAND",
-         proud_flag =  grepl("PROUD", OWNER1) | grepl("PROUD", OWNER2) | grepl("PROUD", OWNER3),
-         trust_flag = grepl("TRUST", OWNER1) | grepl("TRUST", OWNER2) | grepl("TRUST", OWNER3)) %>%
+         llc_flag = grepl("LLC", OWNER1),
+         proud_flag =  grepl("PROUD", OWNER1),
+         trust_flag = grepl("TRUST", OWNER1) & !grepl("FAMILY", OWNER1) & !grepl("LIVING", OWNER1)) %>%
   mutate(arms_length = price_ratio > 20)
 
-# salma looking obs by obs
-view <- test1 %>%
-  filter(top_1 == TRUE)
+# switch the NAs in the constraints to 0s
+to0 <- function(x){
+  ifelse(is.na(x), 0, x)
+  }
+
+# Make a string of constraints and percent canopy names called "con_names"
+clean <- MU %>%
+  dplyr::select(contains("con"), contains("pct")) %>%
+  dplyr::select(-c("CONCRETE", "FIN SECOND", "PAVING/CONCRETE ONLY", "UNF SECOND", "conFldway", "pct_conFldway")) 
+clean_names <- names(clean)
+con_names <- paste(clean_names, collapse = " + ")
 
 # removing observations 
-dat1 <- test1 %>% #34,628
-  filter(top_1 == FALSE, #34,281
-         vacant_dummy == FALSE, #32,984
-         arms_length == TRUE, #32,252
-         proud_flag == FALSE, #32,231
-         #trust_flag == FALSE -- these might be ones to take out on a case by case basis
-  )
+dat2 <- test2 %>% #2008
+  mutate_at(vars(clean_names), to0) %>%
+  filter(top_1 == FALSE, #1987 #21
+         arms_length == TRUE, #1926 #59
+         vacant_dummy == FALSE, #1800 #132
+  ) 
+  
+
+dsexy <- test2 %>%
+  filter(llc_flag == TRUE)
 
 
+#garage sqft
+gar_sqft_sum <- dat2 %>%
+  dplyr::select(matches("gar")) %>%
+  rowSums()
 
-ggplot(test1, aes(x = SALEPRICE, y = TOTALVAL3)) +
-  geom_line() 
+# attic sqft
+attic_sqft_sum <- dat2 %>%
+  dplyr::select(matches("attic")) %>%
+  rowSums()
 
-summary(test1$top_1)
-summary(test1$price_diff)
-summary(test1$price_ratio)
-summary(test1$vacant_dummy)
-summary(test1$arms_length)
-summary(test1$proud_flag)
-summary(test1$trust_flag)
+# basement sqft
+bsmt_sqft_sum <- dat2 %>%
+  dplyr::select(matches("bsmt")) %>%
+  dplyr::select(-c("BSMT PARKING","BSMT GAR")) %>%
+  rowSums()
+  
+dat2 %<>%
+  mutate(garage_sqft = gar_sqft_sum,
+         garage_dum = garage_sqft > 0,
+         attic_sqft = attic_sqft_sum,
+         attic_dum = attic_sqft > 0,
+         bsmt_sqft = bsmt_sqft_sum,
+         bsmt_dum = bsmt_sqft > 0,
+         saledate = mdy(saledate), 
+         year_sold = year(saledate)) %>%
+  filter(yearbuilt > 1500,
+         SALEPRICE < 60000000) # 1339
 
-
-## QUESTIONS
-## Does the order I filter in matter? If I pipe I'll get a different answer?
-## What's up with 322-336 WI/ SW 3RD AVE? 215 sqft and sold for 3mil
-  ## might be smart to have a $ per sqft dummy as well
-#
-## TASKS
-## clean TOTALVAL3 so that all values have same format
-## go through trust flag one by one and remove
-## take out observation with string LLC and then get top 1%
-## Year built make 9999 NA
-## remove props with small totalarea -- some are like 200 sqft
-## remove building type as garage?
-## check dates are in order
-
-# Compare SALEPRICE to TOTALVAL3 --- 
-# note that this is the value of land + building
-# can take on values 09/27/17, 2017, or 2018
 ```
 
-### Regressions
 
-```{r Regress MU}
+### Exploration
 
-# Make a string of constraints and percent canopy names called "con_names" 
-# for use in regression
-clean <- MU %>%
-  select(contains("con"), contains("pct")) %>%
-  select(-c("CONCRETE", "FIN SECOND", "PAVING/CONCRETE ONLY", "UNF SECOND")) 
-con_names <- names(clean)
-con_names <- paste(con_names, collapse = " + ")
+```{r, echo = FALSE}
 
+# A Look at the Dataset-------------------------------------------------
 
+salma <- summary(dat2) # notes in thesis notebook
 
+controls <- dat2 %>%
+  dplyr::select(price_diff, pct_canopy_cov, taxlot_area, yearbuilt, totalsqft, dist_ugb, dist_cityhall, percent_vacant, CN_score, 
+         SALEPRICE)
+nm <- names(controls)
 
-# Box-Cox linear Regression
+# Correlation-------------------------------------------------
 
+correlation2 <- cor(controls, use = "pairwise.complete.obs")
+#takes only obs for which both vars are not NA
 
+# Scatterplots-------------------------------------------------
 
-# Linear Regression
-lm(formula, data, subset, weights, na.action,
-   method = "qr", model = TRUE, x = FALSE, y = FALSE, qr = TRUE,
-   singular.ok = TRUE, contrasts = NULL, offset, ...)
+for (i in seq_along(nm)) {
+  print(names(controls[i]))
+  print(ggplot(controls, aes_string(y = nm[length(nm)], x = nm[i])) + 
+    geom_point(alpha = 0.1) +
+    geom_smooth())
+}
 
+ggplot(dat2, aes(y = SALEPRICE, x = TOTALVAL3)) + 
+    geom_point(alpha = 0.1)
 
-# Semi-log Regression
+ggplot(dat2, aes(y = log(SALEPRICE), x = taxlot_area)) + 
+    geom_point(alpha = 0.1)
 
+# Distribution -- Density Plots---------------------------------
+
+# Now to check the linearity of the variables it is a good practice to plot distribution graph and look for skewness of features. Kernel density estimate (kde) is a quite useful tool for plotting the shape of a distribution.
+
+for (i in seq_along(nm)) {
+  print(names(controls[i]))
+  print(ggplot(controls, aes_string(x = nm[i])) + 
+    geom_histogram(bins = 50))
+}
 
 ```

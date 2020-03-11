@@ -27,7 +27,7 @@ datanames
 ```{r}
 #----------------------
 # GDB sent 10/29 via email
-gdb <- here("DATA", "data2.gdb")
+gdb <- here::here("DATA", "data2.gdb")
 
 capacity <- st_read(gdb, layer = "bli_development_capacity")
 impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
@@ -37,42 +37,78 @@ school <- st_read(gdb, layer = "school_attendance_areas")
 
 #----------------------
 # GDB sent 10/10 via USB
-gdb2 <- here("DATA", "data1.gdb")
+gdb2 <- here::here("DATA", "data1.gdb")
 
 taxlots <- st_read(gdb2, "taxlots_20191010")
 footprints <- st_read(gdb2, "building_footprints_20191010")
 
 #----------------------
 # GDB sent 11/12 via email
-gdb3 <- here("DATA", "data_20191112.gdb")
+gdb3 <- here::here("DATA", "data_20191112.gdb")
 
 bli_constraints <- st_read(gdb3, "bli_constraints_all")
 nbhd <- st_read(gdb3, "neighborhoods_no_overlap")
 
 #----------------------
 # GDB sent 11/22 via email
-gdb4 <- here("DATA", "tree_canopy.gdb")
+gdb4 <- here::here("DATA", "tree_canopy.gdb")
 
 bli_constraints_v2 <- st_read(gdb4, "bli_constraints_v2_pts_run4")
 
 #----------------------
 # SHP sent 11/25 via email
 
-ugb <- st_read(here("DATA", "ugb",
+ugb <- st_read(here::here("DATA", "ugb",
                               "ugb.shp"))
 
 #----------------------
 # GDB sent 2/10 via email
-gdb5 <- here("DATA", "canopy_20200210.gdb")
+gdb5 <- here::here("DATA", "canopy_20200210.gdb")
 
 canopy <- st_read(gdb5, "canopy_taxlot_intersect")
 
 #----------------------
 # GDB 2/11 from PortlandMaps
-walk_gdb <- here("DATA", "Complete_Neighborhoods_Scoring_Surface")
+walk_gdb <- here::here("DATA", "Complete_Neighborhoods_Scoring_Surface")
 
 walk <- st_read(walk_gdb, 
            layer = "Complete_Neighborhoods_Scoring_Surface")
+
+#----------------------
+# Load crosswalk from Nick sent via email 02/04
+crosswalk <- read_xlsx(here::here("DATA", "zoning_crosswalk.xlsx"))
+crosswalk %<>%
+  rename(sale_zone = `Base Zone`)
+
+#----------------------
+# Load
+intersectionz <- st_read(here::here("DATA", "constraint_layers.gdb"),
+                         "Intersectionz")
+
+#----------------------
+# read intersected data (done in GIS using FEMA map + footprints)
+foot_flood <- st_read(here::here("DATA", "ft_fld.gdb"), layer = "ft_floodplain")
+
+#----------------------
+# Load zoning shape files
+zoningaug2014 <- st_read(here::here("DATA", "Zoning_History",
+                              "Zoning_2014_Aug_pdx.shp"))
+zoningfeb2014 <- st_read(here::here("DATA", "Zoning_History",
+                              "Zoning_2014_Feb_pdx.shp"))
+zoningaug2015 <- st_read(here::here("DATA", "Zoning_History",
+                              "Zoning_2015_Aug_pdx.shp"))
+zoningfeb2015 <- st_read(here::here("DATA", "Zoning_History",
+                              "Zoning_2015_Feb_pdx.shp"))
+zoningaug2016 <- st_read(here::here("DATA", "Zoning_History",
+                              "Zoning_2016_Aug_pdx.shp"))
+zoningfeb2016 <- st_read(here::here("DATA", "Zoning_History",
+                              "Zoning_2015_Feb_pdx.shp"))
+zoningaug2017 <- st_read(here::here("DATA", "Zoning_History",
+                              "Zoning_2017_Aug_metro.shp"))
+zoningaug2018 <- st_read(here::here("DATA", "Zoning_History",
+                              "Zoning_2018_Aug_pdx.shp"))
+zoningfeb2018 <- st_read(here::here("DATA", "Zoning_History",
+                              "Zoning_2018_Feb_pdx.shp"))
 
 ```
 
@@ -437,7 +473,13 @@ Now we will try merging/collapsing footprints on this smaller subset of the enti
 ```{R}
 # grab only the footprints associated with stateids in our sample
 ftprints_pruned <- footprints %>%
-  filter(STATE_ID %in% stateids) 
+  filter(STATE_ID %in% stateids) %>%
+  mutate(YEAR_BUILT = case_when(YEAR_BUILT == 2106 ~ 2016,
+                   TRUE ~ as.numeric(YEAR_BUILT)))
+
+# make YEAR_BUILT zeros into NA's so that they average together properly
+ftprints_pruned$YEAR_BUILT[ftprints_pruned$YEAR_BUILT == 0] <- NA
+
 
 # Make collapsed footprints dataset called `allfeet`
 ftprints_pruned %<>% 
@@ -680,8 +722,6 @@ print(paste0("constraints Join: ", as.character(sum(data.frame(table(fugly$STATE
 ### conFld100 - Building Footprint
 
 ```{r}
-# read intersected data (done in GIS using FEMA map + footprints)
-foot_flood <- st_read(here("DATA", "ft_fld.gdb"), layer = "ft_floodplain")
 
 ftfld_ids <- foot_flood %>%
   filter(STATE_ID %in% stateids) %>%
@@ -696,9 +736,6 @@ fugly %<>%
 ### Partial Constraints!
 
 ```{r}
-# Read
-intersectionz <- st_read(here("DATA", "constraint_layers.gdb"),
-                         "Intersectionz")
 
 partial <- intersectionz %>%
   filter(STATE_ID %in% stateids) %>%
@@ -739,25 +776,41 @@ fugly <- left_join(fugly, partial, by = "STATE_ID")
 ### Zoning over time
 
 ```{r}
-# Load zoning shape files
-zoningaug2014 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2014_Aug_pdx.shp"))
-zoningfeb2014 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2014_Feb_pdx.shp"))
-zoningaug2015 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2015_Aug_pdx.shp"))
-zoningfeb2015 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2015_Feb_pdx.shp"))
-zoningaug2016 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2016_Aug_pdx.shp"))
-zoningfeb2016 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2015_Feb_pdx.shp"))
-zoningaug2017 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2017_Aug_metro.shp"))
-zoningaug2018 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2018_Aug_pdx.shp"))
-zoningfeb2018 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2018_Feb_pdx.shp"))
+i <- zoningaug2014
+j <- "zoningaug2014"
+k <- str_replace(j, "zoning", "_")
+
+zonelist <- list(zoningaug2014 = zoningaug2014,
+                 zoningaug2015 = zoningaug2015,
+                 zoningaug2016 = zoningaug2016,
+                 zoningaug2017 = zoningaug2017,
+                 zoningaug2018 = zoningaug2018,
+                 zoningfeb2014 = zoningfeb2014, 
+                 zoningfeb2015 = zoningfeb2015,
+                 zoningfeb2016 = zoningfeb2016,
+                 zoningfeb2018 = zoningfeb2018)
+# test
+for(i in zonelist){
+  print(paste0("hi!"))
+  names <- names(zonelist)[[1]]
+  return(names)
+}
+
+# good code
+for(i in zonelist){
+  name <- names(zonelist)[[i]]
+  print(paste0(name))
+  # string <- str_replace(name, "zoning", "_")
+  # colnames(i) <- paste0(colnames(i), string)
+  # st_geometry(i) <- paste0("geometry", string)
+}
+
+# code from summer
+for (name in zonelist){
+  data_dat <- name[1]
+  data_str <- colnames(data_dat[1])
+  return(data_dat, data_str)
+}
 
 colnames(zoningaug2014) <- paste0(colnames(zoningaug2014), "_aug2014")
 st_geometry(zoningaug2014) <- "geometry_aug2014"
@@ -818,11 +871,6 @@ zones_over_time %<>%
   dplyr::mutate(sale_zone = ifelse(is.na(sale_zone), 
                                    as.character(ZONE_aug2018), 
                                    sale_zone))
-
-# Load crosswalk from Nick sent via email 02/04
-crosswalk <- read_xlsx(here("DATA", "zoning_crosswalk.xlsx"))
-crosswalk %<>%
-  rename(sale_zone = `Base Zone`)
 
 # Join use crosswalk to generate  prop_type variable: MFR, SFR, mixed use
 zones_over_time %<>%

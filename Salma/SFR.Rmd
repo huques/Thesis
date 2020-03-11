@@ -21,7 +21,7 @@ library(sjPlot)
 library(lubridate)
 
 # read in csv
-thesis_data <- read_csv(here("DATA","thesis-data.csv"))
+thesis_data <- read_csv(here::here("DATA","thesis-data.csv"))
 ```
 
 ### Cheatsheet
@@ -37,9 +37,59 @@ dat1 <- applying flags to trim dataset
 
 ```{r, echo = FALSE}
 
-# Create Data Frames
+
+# LOOKING AT PROPCD_DESC 
+# problem: many of the fringe observation we have are not actually SFR, they include rowhouses and manufactured home parks and the like. Here, I am going to try to get to a better sample dataset of SFR. 
+
+
+# First: Try filtering by PRPCD = Residential Improved instead of Prop_type = SFR
+resimp <- thesis_data %>%
+  filter(PRPCD_DESC == "RESIDENTIAL IMPROVED")
+
+# problem -- there's commercial properties and all sorts of different sale_zones still in this:
+
+#  [1] "Residential 5,000"              "Residential 2,000"             
+#  [3] "Residential 2,500"              "Residential 1,000"             
+#  [5] "Neighborhood Commercial 2"      "General Commercial"            
+#  [7] "Residential 7,000"              "Residential 3,000"             
+#  [9] "Storefront Commercial"          "Residential 10,000"            
+# [11] "General Employment 2"           "Mixed Commercial / Residential"
+# [13] "Residential Farm / Forest"      "High Density Residential"      
+# [15] "Central Commercial"             "Residential 20,000"            
+# [17] "Neighborhood Commercial 1"      "General Industrial 1"          
+# [19] "Institutional Residential"      "Central Residential"           
+# [21] "Office Commercial 2"            "Central Employment"            
+# [23] "General Industrial 2"           "Office Commercial 1"           
+# [25] "General Employment 1"           "Heavy Industrial"   
+
+# Second: Try filtering by sale_zone in the base zoning for SFR. Note that it might still include duplexes and some attached family residences, but should still mainly be detached SFRs
+
+reszone <- thesis_data %>%
+  filter(sale_zone %in% c("RF", "R20", "R10", "R7", "R5", "R2.5"))
+
+# this does same thing as prop_type = single family lol. you get all these gross PRPCD-DESCs:
+
+#  [1] "RESIDENTIAL IMPROVED"              "2-4 UNIT MULTI-FAMILY"            
+#  [3] "CHURCH"                            "VACANT LAND"                      
+#  [5] "ROW/ATTACHED HOUSING"              "SPECIAL CARE/NURSING/SKILLED CARE"
+#  [7] "ADULT FOSTER CARE"                 "STORE RETAIL-SMALL"               
+#  [9] "9-20 UNIT MULTI-FAMILY"            "MISC IMPROVEMENTS"                
+# [11] "5-8 UNIT MULTI-FAMILY"             "GENERIC COMMERCIAL USE"           
+# [13] "CT APT 21-100 UNITS"               "RESTAURANT TAVERN"                
+# [15] "OFFICE LOW RISE"                   "WHSE GENERAL/MISC"                
+# [17] "MANUFACTURE HOME PARK"             "STOREFRONT"                       
+# [19] "RESIDENTIAL, COMMERCIAL USE"       "WALK-UP APT 5-20 UNITS"           
+# [21] "PUBLIC BLDG"                       "ASSISTED LIVING/INDEPENDENT"      
+# [23] "STORE W/APT OR OFFICE OVER"        "DAY CARE CENTER"                  
+# [25] "MIXED PRIMARY BUILDINGS"           "RESTAURANT DINING/LOUNGE"  
+
+
+# Third: Combine first and second
+
 SFR <- thesis_data %>%
-  filter(prop_type == "Single-family")
+  filter(PRPCD_DESC == "RESIDENTIAL IMPROVED", prop_type == "Single-family")
+
+# gives 25,266 observations off the bat, meaning we lost 9,362 from thesis_data and 1,934 additional variables that are assigned "single family" as property type, but are zoned otherwise. For now, I am going to use this dataframe to run everything below. 
 
 # Check for duplicates one more time
 # All equal zero, meaning there are no duplicates of each of these variables
@@ -54,15 +104,23 @@ sum(data.frame(table(SFR$TLID))$Freq > 1)
 # What to do with non-conforming? Look up on PDX Maps
 ```
 
-SFR data frame has 27,200 observations initially.
+SFR data frame has 25,266 observations initially.
 
 No observation repeat in any of the data frames acording to the unique IDs we have recorded for them. 
+
+
+### Examining Noncomforming
+
+```{r}
+noncon <- thesis_data %>%
+  filter(prop_type == "Non-conforming")
+```
+
 
 ### Clean SFR Dataframe
 
 ```{r, echo = FALSE}
-
-#-------------------- BEGINNING RYAN CODE ------------------------
+#-------------------- BEGINNING RYAN CODE (with minor edits)---------------------
 
 test1 <- SFR %>%
   dplyr::select(-c(OWNER2, OWNER3, OWNERZIP, 
@@ -71,14 +129,16 @@ test1 <- SFR %>%
             LANDVAL1, LANDVAL2,  
             TOTALVAL1, TOTALVAL2,
             MS_GRADE, ES_GRADE,
-            LEGAL_DESC, TAXCODE, PROP_CODE, LANDUSE, BLDGSQFT, BEDROOMS, ACC_STATUS, NAME, COMMPLAN, SHARED, COALIT, HORZ_VERT, AUDIT_NBRH, MIDDLE_SCH,  Category, SOURCE, FRONTAGE, COUNTY, YEARBUILT, bldgtype)) %>%
+            LEGAL_DESC, TAXCODE, PROP_CODE, LANDUSE, BEDROOMS, ACC_STATUS, NAME, COMMPLAN, SHARED, COALIT, HORZ_VERT, AUDIT_NBRH, MIDDLE_SCH,  Category, SOURCE, FRONTAGE, COUNTY, YEARBUILT, bldgtype)) %>%
   mutate(top_1 =  SALEPRICE > quantile(SALEPRICE, .99),
+         MKTVALYR3 = case_when(MKTVALYR3 != 2018 ~ 2017, 
+                                         TRUE ~ 2018),
          price_diff = SALEPRICE - LANDVAL3, 
          price_ratio = SALEPRICE/LANDVAL3 * 100,
          vacant_dummy = PRPCD_DESC == "VACANT LAND",
          llc_flag = grepl("LLC", OWNER1),
          proud_flag =  grepl("PROUD", OWNER1),
-         trust_flag = grepl("TRUST", OWNER1)) %>%
+         trust_flag = grepl("TRUST", OWNER1) & !grepl("FAMILY", OWNER1) & !grepl("LIVING", OWNER1)) %>%
   mutate(arms_length = price_ratio > 20,
          na_if(yearbuilt, 0))
 
@@ -87,15 +147,28 @@ to0 <- function(x){ifelse(is.na(x), 0, x)}
 
 #------------------------- END RYAN CODE ----------------------------
 
+# Make a string of constraints and percent canopy names called "con_names"
+clean <- SFR %>%
+  dplyr::select(contains("con"), contains("pct")) %>%
+  dplyr::select(-c("CONCRETE", "FIN SECOND", "PAVING/CONCRETE ONLY", "UNF SECOND", "conFldway", "pct_conFldway")) 
+clean_names <- names(clean)
+con_names <- paste(clean_names, collapse = " + ")
+
 # removing observations 
-dat1 <- test1 %>% #27,200
-  filter(top_1 == FALSE, #26,931
-         vacant_dummy == FALSE, #26,095
-         arms_length == TRUE, #25,535
-         proud_flag == FALSE, #25,520
-         #trust_flag == FALSE -- these might be ones to take out on a case by case basis
+dat1 <- test1 %>% #25,266
+  mutate_at(vars(clean_names), to0) %>%
+  filter(top_1 == FALSE, #25,013, #253
+         arms_length == TRUE, #24,495 #472
+         vacant_dummy == FALSE, #24,495 #0
+         proud_flag == FALSE, #24,480 #15
+         llc_flag == FALSE, #24,128 #413
+         trust_flag == FALSE #24,081 #52
   )
 
+trust <- test1 %>%
+  filter(top_1 == TRUE) %>%
+  summarise(mean = mean(SALEPRICE),
+            median = median(SALEPRICE))
 #-------------------- BEGINNING RYAN CODE ------------------------
 
 #garage sqft
@@ -122,14 +195,11 @@ dat1 %<>%
          bsmt_sqft = bsmt_sqft_sum,
          bsmt_dum = bsmt_sqft > 0,
          saledate = mdy(saledate), 
-         year_sold = year(saledate))
+         year_sold = year(saledate)) %>%
+  filter(between(totalsqft, 1, 7500), 
+         yearbuilt > 1500)
 
 #------------------------- END RYAN CODE ----------------------------
-
-
-  #%>%
-  #recode(MKTVALYR, "09/27/17" = "2017")
-
 
 # test2 <- SFR %>%
 #     as.Date(MKTVALYR, saledate)
@@ -140,16 +210,16 @@ dat1 %<>%
 # deal with this
 
 
-ggplot(test1, aes(x = SALEPRICE, y = LANDVAL3)) +
-  geom_point() 
-
-summary(test1$top_1)
-summary(test1$price_diff)
-summary(test1$price_ratio)
-summary(test1$vacant_dummy)
-summary(test1$arms_length)
-summary(test1$proud_flag)
-summary(test1$trust_flag)
+# ggplot(test1, aes(x = SALEPRICE, y = LANDVAL3)) +
+#   geom_point() 
+# 
+# summary(test1$top_1)
+# summary(test1$price_diff)
+# summary(test1$price_ratio)
+# summary(test1$vacant_dummy)
+# summary(test1$arms_length)
+# summary(test1$proud_flag)
+# summary(test1$trust_flag)
 
 
 ## QUESTIONS
@@ -158,17 +228,30 @@ summary(test1$trust_flag)
   ## might be smart to have a $ per sqft dummy as well
 #
 ## TASKS
-## clean MKTVALYR3 so that all values have same format
-## go through trust flag one by one and remove
-## take out observation with string LLC and then get top 1%
-## Year built make 9999 NA
 ## remove props with small totalarea -- some are like 200 sqft
-## remove building type as garage? YES
-## check dates are in order
 
 # Compare SALEPRICE to TOTALVAL3 --- 
 # note that this is the value of land + building
 # MKTVALYR3 can take on values 09/27/17, 2017, or 2018
+
+# unique(dat1$X1)
+# ncol(dat1)
+# # for(i in 1:ncol(dat1)){
+# 
+# datcol <- colnames(dat1)
+# 
+# datcol
+# 
+# kelly <- matrix(data = NA, nrow = 40, ncol = length(dat1)) %>%
+#   as.data.frame() %>%
+#   rename(paste(datcol,))
+# 
+# for(i in seq_along(names(dat1))){
+#   print(paste("hi"))
+#   print(unique(dat1[i])
+#   head(sort(unique(dat1$AREA)))
+# }
+
 ```
 
 
@@ -206,6 +289,7 @@ ggplot(dat1, aes(y = log(SALEPRICE), x = taxlot_area)) +
     geom_point()
 
 # Outliers -- Box Plots
+
 # best for discrete x
 
 for (i in seq_along(nm)) {
@@ -215,6 +299,7 @@ for (i in seq_along(nm)) {
 }
 
 # Distribution of Constraints -- Density Plots
+
 # Now to check the linearity of the variables it is a good practice to plot distribution graph and look for skewness of features. Kernel density estimate (kde) is a quite useful tool for plotting the shape of a distribution.
 
 for (i in seq_along(nm)) {
@@ -254,29 +339,13 @@ Percent Vacant -- nothing, surprisingly, weird peak at 100%
 Distance to UGB -- most people live 1000-3000 units (?) away from the UGB
 
 
-A Look at the Dataset
-
-number of rows, column, type of each control (struc, neighbor, etc), number of constraints, etc
-
-edited: 3/5 12:07am
-The cleaned dataset has
-
 look at class to make sure everything's right
 null/missing values vs zeros
-means and medians, max and min for each var
-
 
 
 ### Regressions
 
 ```{r, echo = FALSE}
-
-# Make a string of constraints and percent canopy names called "con_names"
-clean <- SFR %>%
-  dplyr::select(contains("con"), contains("pct")) %>%
-  dplyr::select(-c("CONCRETE", "FIN SECOND", "PAVING/CONCRETE ONLY", "UNF SECOND", "conFldway", "pct_conFldway")) 
-con_names <- names(clean)
-con_names <- paste(con_names, collapse = " + ")
 
 # mutate sale price transformations
 dat1 %<>% 
@@ -340,11 +409,8 @@ plot(sfr_mod_log)
 #   
 # # TASKS
 # # check all variables for necessary transformations
-# # combine GARAGE
 # # create CAPACITY
 # # create OVERSIZED LOT DUMMY
-# # combine BASEMENT
-# # combine ATTIC
 # # SAT? Student exp?
 # # transform zone????????????????
 
@@ -450,10 +516,15 @@ filter(dat1, STATE_ID == "1S2E02AD  101")
 
 
 
-```{r}
-noncon <- thesis_data %>%
-  filter(prop_type == "Non-conforming")
-```
+PLAYING AROUND WITH PRICE RATIO
+PLAYING AROUND WITH IMPROVMENT DUMMY VS IMPROVEMENT SQFT
+PLAYING AROUND WITH CONSTRAINT DUMMY VS INDIVUDAL DUMMY FOR EACH CONSTRAINT
+PLAYING AROUND WITH CN_SCORE VS NEIGHBORHOOD VS ELEMENTARY SCHOOL (bc its included within cn_score)
+PLAYING AROUND WITH KEEPING IN TRUSTS AND LLCs
+PLAYING AROUND WITH VACANT DUMMY VS PERCENT VACANT (AND OTHER PERCENT CONSTRAINTS)
+PLAYING AROUND WITH ZONING HISTORY -- ?????
+PLAYING 
+
 
 
 

@@ -1,0 +1,157 @@
+---
+title: "Pretty_SFR"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Import Packages + Read in Data
+
+```{r, include = FALSE}
+library(tidyverse)
+library(magrittr)
+library(here)
+library(data.table)
+library(MASS)
+library(kableExtra)
+library(lubridate)
+
+# read in csv
+thesis_data <- read_csv(here::here("DATA","thesis-data.csv"))
+```
+
+
+```{r}
+# Split Data
+SFR <- thesis_data %>%
+  filter(PRPCD_DESC == "RESIDENTIAL IMPROVED", prop_type == "Single-family")
+
+# Clean SFR Dataframe
+test1 <- SFR %>%
+  dplyr::select(-c(OWNER2, OWNER3, OWNERZIP, 
+            MKTVALYR1, MKTVALYR2,
+            BLDGVAL1, BLDGVAL2,
+            LANDVAL1, LANDVAL2,  
+            TOTALVAL1, TOTALVAL2,
+            MS_GRADE, ES_GRADE,
+            LEGAL_DESC, TAXCODE, PROP_CODE, LANDUSE, BEDROOMS, ACC_STATUS, NAME, COMMPLAN, SHARED, COALIT, HORZ_VERT, AUDIT_NBRH, MIDDLE_SCH,  Category, SOURCE, FRONTAGE, COUNTY, YEARBUILT, bldgtype)) %>%
+  mutate(top_1 =  SALEPRICE > quantile(SALEPRICE, .99),
+         MKTVALYR3 = case_when(MKTVALYR3 != 2018 ~ 2017, 
+                                         TRUE ~ 2018),
+         price_diff = SALEPRICE - LANDVAL3, 
+         price_ratio = SALEPRICE/LANDVAL3 * 100,
+         vacant_dummy = PRPCD_DESC == "VACANT LAND",
+         llc_flag = grepl("LLC", OWNER1),
+         proud_flag =  grepl("PROUD", OWNER1),
+         trust_flag = grepl("TRUST", OWNER1) & !grepl("FAMILY", OWNER1) & !grepl("LIVING", OWNER1)) %>%
+  mutate(arms_length = price_ratio > 20,
+         na_if(yearbuilt, 0))
+
+# switch the NAs in the constraints to 0s
+to0 <- function(x){ifelse(is.na(x), 0, x)}
+
+# Make a string of constraints and percent canopy names called "con_names"
+clean <- SFR %>%
+  dplyr::select(contains("con"), contains("pct")) %>%
+  dplyr::select(-c("CONCRETE", "FIN SECOND", "PAVING/CONCRETE ONLY", "UNF SECOND", "conFldway", "pct_conFldway")) 
+clean_names <- names(clean)
+con_names <- paste(clean_names, collapse = " + ")
+
+# removing observations 
+dat1 <- test1 %>% #25,266
+  mutate_at(vars(clean_names), to0) %>%
+  filter(top_1 == FALSE, #25,013, #253
+         arms_length == TRUE, #24,495 #472
+         vacant_dummy == FALSE, #24,495 #0
+         proud_flag == FALSE, #24,480 #15
+         llc_flag == FALSE, #24,128 #413
+         trust_flag == FALSE #24,081 #52
+  )
+
+#garage sqft
+gar_sqft_sum <- dat1 %>%
+  dplyr::select(matches("gar")) %>%
+  rowSums()
+
+# attic sqft
+attic_sqft_sum <- dat1 %>%
+  dplyr::select(matches("attic")) %>%
+  rowSums()
+
+# basement sqft
+bsmt_sqft_sum <- dat1 %>%
+  dplyr::select(matches("bsmt")) %>%
+  dplyr::select(-c("BSMT PARKING","BSMT GAR")) %>%
+  rowSums()
+  
+dat1 %<>%
+  mutate(garage_sqft = gar_sqft_sum,
+         garage_dum = garage_sqft > 0,
+         attic_sqft = attic_sqft_sum,
+         attic_dum = attic_sqft > 0,
+         bsmt_sqft = bsmt_sqft_sum,
+         bsmt_dum = bsmt_sqft > 0,
+         saledate = mdy(saledate), 
+         year_sold = year(saledate)) %>%
+  filter(between(totalsqft, 1, 7500), 
+         yearbuilt > 1500)
+
+```
+
+
+### Exploration
+
+```{r, echo = FALSE}
+
+# A Look at the Dataset-------------------------------------------------
+
+salma <- summary(dat1) # notes in thesis notebook
+
+controls <- dat1 %>%
+  dplyr::select(price_diff, pct_canopy_cov, taxlot_area, yearbuilt, totalsqft, dist_ugb, dist_cityhall, percent_vacant, CN_score, 
+         SALEPRICE)
+nm <- names(controls)
+
+# Correlation-------------------------------------------------
+
+correlation <- cor(controls, use = "pairwise.complete.obs")
+#takes only obs for which both vars are not NA
+
+# Scatterplots-------------------------------------------------
+
+for (i in seq_along(nm)) {
+  print(names(controls[i]))
+  print(ggplot(controls, aes_string(y = nm[length(nm)], x = nm[i])) + 
+    geom_point(alpha = 0.1) +
+    geom_smooth())
+}
+
+ggplot(dat1, aes(y = SALEPRICE, x = TOTALVAL3)) + 
+    geom_point(alpha = 0.1)
+
+ggplot(dat1, aes(y = log(SALEPRICE), x = taxlot_area)) + 
+    geom_point(alpha = 0.1)
+
+# Outliers -- Box Plots-------------------------------------------------
+
+# best for discrete x
+
+for (i in seq_along(nm)) {
+  print(names(controls[i]))
+  print(ggplot(controls, aes_string(y = nm[length(nm)], x = nm[i])) + 
+    geom_boxplot(alpha = 0.1))
+}
+
+# Distribution -- Density Plots---------------------------------
+
+# Now to check the linearity of the variables it is a good practice to plot distribution graph and look for skewness of features. Kernel density estimate (kde) is a quite useful tool for plotting the shape of a distribution.
+
+for (i in seq_along(nm)) {
+  print(names(controls[i]))
+  print(ggplot(controls, aes_string(x = nm[i])) + 
+    geom_histogram(bins = 50))
+}
+
+```
