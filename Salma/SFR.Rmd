@@ -15,9 +15,10 @@ library(magrittr)
 library(here)
 library(data.table)
 library(MASS)
+library(knitr)
+library(xtable)
+library(pander)
 library(stargazer)
-library(broom)
-library(sjPlot)
 library(lubridate)
 
 # read in csv
@@ -364,6 +365,17 @@ sfr_lin = formula(paste0("SALEPRICE ~
 # regression
 sfr_mod_linear <- lm(sfr_lin, dat1)
 summary(sfr_mod_linear)
+
+sfr.table <- xtable(sfr_mod_linear)
+kable(sfr.table, caption = "Linear table")
+
+
+star.1 <- stargazer(sfr_mod_linear,
+                    title="Title: Regression Results"
+                    )
+kable(star.1, caption = "Linear table stargazr")
+
+pander(summary(sfr_mod_linear)) 
 #not plotting observations with leverage one: 5135, 11888, 14466???
 
 
@@ -422,36 +434,36 @@ residuals?? unsure how to interpret, theres a little red line
 
 ### Output
 
-```{r}
-stargazer(sfr_mod_linear, sfr_mod_log, sfr_mod_bc, title="Results", align=TRUE)
-
-
-----
-  
-  
-sfr_mod_linear <- tidy(lm(sfr_lin, dat1))
-sfr_mod_log <- tidy(lm(sfr_log, dat1))
-sfr_mod_bc <- tidy(lm(sfr_bc, dat1))
-
-all_models <- rbind_list(
-    sfr_mod_linear %>% mutate(model = 1),
-    sfr_mod_log %>% mutate(model = 2),
-    sfr_mod_bc %>% mutate(model = 3))
-
-all_models
-
-ols_table <- all_models %>%
-    select(-statistic, -p.value) %>%
-    mutate_each(funs(round(., 2)), -term) %>% 
-    gather(key, value, estimate:std.error) %>%
-    spread(model, value) 
-
-ols_table
-
-
-------------
-  
-tab_model(sfr_mod_linear, sfr_mod_log, sfr_mod_bc, file="try_1.doc")
+# ```{r}
+# stargazer(sfr_mod_linear, sfr_mod_log, sfr_mod_bc, title="Results", align=TRUE)
+# 
+# 
+# ----
+#   
+#   
+# sfr_mod_linear <- tidy(lm(sfr_lin, dat1))
+# sfr_mod_log <- tidy(lm(sfr_log, dat1))
+# sfr_mod_bc <- tidy(lm(sfr_bc, dat1))
+# 
+# all_models <- rbind_list(
+#     sfr_mod_linear %>% mutate(model = 1),
+#     sfr_mod_log %>% mutate(model = 2),
+#     sfr_mod_bc %>% mutate(model = 3))
+# 
+# all_models
+# 
+# ols_table <- all_models %>%
+#     select(-statistic, -p.value) %>%
+#     mutate_each(funs(round(., 2)), -term) %>% 
+#     gather(key, value, estimate:std.error) %>%
+#     spread(model, value) 
+# 
+# ols_table
+# 
+# 
+# ------------
+#   
+# tab_model(sfr_mod_linear, sfr_mod_log, sfr_mod_bc, file="try_1.doc")
 
 ```
 
