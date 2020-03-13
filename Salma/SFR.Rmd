@@ -312,33 +312,6 @@ for (i in seq_along(nm)) {
 
 ```
 
-SALE PRICE -- nicely right skewed with a peak around 400,000
-
-Fireplaces -- having 2 fireplaces could tease out some info about median level houses
-
-Full Baths -- as number of full baths increases, sale price increases. 
-
-Taxlot Area -- a couple of outliers **i need to excise**. no trend with just sale price, need to try log sale price. **not sure how to interpret. ** right skewed but kinda ugly
-
-Percent Canopy Cover -- useless blob. There's a concentration of data less than 50% canopy cover, but that might just be science. **not sure how to interpret. **
-extremely right skewed
-
-Price Difference -- perfectly linear, beautiful, im gonna cry. As the gap between sale price and assessed value becomes larger, sale price becomes larger. tells you absolutely nothing. more right skewed
-
-Total Value Yr 3 -- roughly linear with a steep positive slope. 
-
-**Year Built** -- not distinct, but older and newer houses tend to be more expensive
-
-Total Sqft -- sorta linear, right skewed
-
-**Distance to City Hall** -- super cool negative exponential trend!!!!! I'M SO EXCITED. As distance increases, sale price decreases at a decreasing rate. most people like 15,000-25,000 units (?) away from city centre
-
-Percent Vacant -- nothing, surprisingly, weird peak at 100%
-
-**Complete Neighborhoods Score** -- kind of an exponential? **need help** left skewed
-
-Distance to UGB -- most people live 1000-3000 units (?) away from the UGB
-
 
 look at class to make sure everything's right
 null/missing values vs zeros
@@ -354,18 +327,17 @@ dat1 %<>%
          SALEPRICElog = log(SALEPRICE),
          SALEPRICEsqrt = SALEPRICE^.5)
 
-
-
 # LINEAR REGRESSION
 
-# pre-analysis formula
+# formula
 sfr_lin = formula(paste0("SALEPRICE ~ 
                              f_baths + h_baths + n_fireplaces + yearbuilt + totalsqft + I(totalsqft^2) + taxlot_area + FLOORS + surfelev + percent_vacant + dist_cityhall + HIGH_SCH + MapLabel + CN_score + dist_ugb + ", con_names))
 
-# regression
+# reg
 sfr_mod_linear <- lm(sfr_lin, dat1)
 summary(sfr_mod_linear)
 
+# output
 sfr.table <- xtable(sfr_mod_linear)
 kable(sfr.table, caption = "Linear table")
 
@@ -377,6 +349,24 @@ kable(star.1, caption = "Linear table stargazr")
 
 pander(summary(sfr_mod_linear)) 
 #not plotting observations with leverage one: 5135, 11888, 14466???
+
+# output v4 : turns into html -- GOOD
+# library(stargazer)
+# stargazer(sfr_mod_linear, type="html", out="models.htm")
+
+# output v2 : creates a data frame that can also be converted into word
+# library(broom)
+# will <- dat1 %>% 
+#   do(tidy(lm(sfr_lin, data = .)))
+
+#output v3 : creates a .txt file with stars! difficult to parse properly -- not good
+# sink("lm.txt")
+# print(summary(sfr_mod_linear, signif.stars = TRUE))
+# sink()
+
+# output v5 : turns into csv -- ugly -- not good
+# library(broom)
+# write.csv(tidy(sfr_mod_linear) , "hmm.csv" )
 
 
 # BOX-COX (LINEAR) REGRESSION
@@ -408,8 +398,18 @@ sfr_mod_log <- lm(sfr_log, dat1)
 summary(sfr_mod_log)
 plot(sfr_mod_log)
 
+# output v1 : creates an xable that can be converted in word, no *** or stats
+sfr_lin.table <- xtable(sfr_lin_mod)
+kable(sfr_lin.table, caption = "SFR Linear table dummies")
+print.xtable(sfr_lin.table, type="html", file="sfr_lin_xtable.html")
 
+sfr_bc.table <- xtable(sfr_mod_bc)
+kable(sfr_bc.table, caption = "SFR Box-Cox Regression Results")
+print.xtable(sfr_bc.table, type="html", file="sfr_bc_xtable.html")
 
+sfr_log.table <- xtable(sfr_mod_log)
+kable(sfr_log.table, caption = "Linear table")
+print.xtable(sfr_log.table, type="html", file="sfr_log_xtable.html")
 
 
 # # QUESTIONS

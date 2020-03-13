@@ -20,7 +20,7 @@ library(caret)
 
 
 ```{r warning=FALSE}
-df <- read_csv("/Users/ryankobler/Desktop/thesis/Thesis/DATA/thesis-data.csv")
+df <- read_csv(here::here("DATA","thesis-data.csv"))
 
 # DROPS
 df %<>%

@@ -15,6 +15,10 @@ library(magrittr)
 library(here)
 library(data.table)
 library(MASS)
+library(xtable)
+library(knitr)
+library(stargazer)
+library(pander)
 library(kableExtra)
 library(lubridate)
 
@@ -23,7 +27,7 @@ thesis_data <- read_csv(here::here("DATA","thesis-data.csv"))
 ```
 
 
-```{r}
+```{r, echo = FALSE}
 # Split Data
 SFR <- thesis_data %>%
   filter(PRPCD_DESC == "RESIDENTIAL IMPROVED", prop_type == "Single-family")
@@ -103,7 +107,7 @@ dat1 %<>%
 
 ### Exploration
 
-```{r, echo = FALSE}
+```{r, eval = FALSE, echo = FALSE}
 
 # A Look at the Dataset-------------------------------------------------
 
@@ -155,3 +159,67 @@ for (i in seq_along(nm)) {
 }
 
 ```
+
+
+### Regressions
+
+```{r, echo = FALSE}
+
+# LINEAR REGRESSION-----------------------------------------
+
+# formula: only dummies, no percent except for percent canopy cover
+sfr_lin = formula(paste0("SALEPRICE ~ 
+                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + yearbuilt + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_dum + attic_dum + bsmt_dum + year_sold + MapLabel + HIGH_SCH + ", con_names))
+
+# reg
+sfr_lin_mod <- lm(sfr_lin, dat1)
+summary(sfr_lin_mod)
+
+#plot(sfr_lin_mod)
+
+
+
+# BOX-COX (LINEAR) REGRESSION--------------------------------------------
+
+bc = boxcox(sfr_mod_linear, lamba = seq(-3, 3, 1))
+best_lam = bc$x[which(bc$y == max(bc$y))]
+dat1 %<>% 
+  mutate(SALEPRICEbc = SALEPRICE^best_lam)
+
+# pre-analysis formula
+sfr_bc = formula(paste0("SALEPRICEbc ~ 
+                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + yearbuilt + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_dum + attic_dum + bsmt_dum + year_sold + MapLabel + HIGH_SCH + ", con_names))
+
+# regression
+sfr_mod_bc <- lm(sfr_bc, dat1)
+summary(sfr_mod_bc)
+
+#plot(sfr_mod_bc)
+
+
+
+# SEMI-LOG REGRESSION-------------------------------------------
+
+dat1 %<>% 
+  mutate(SALEPRICElog = log(SALEPRICE))
+
+#pre-analysis formula
+sfr_log = formula(paste0("SALEPRICElog ~ 
+                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + yearbuilt + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_dum + attic_dum + bsmt_dum + year_sold + MapLabel + HIGH_SCH + ", con_names))
+
+# regression
+sfr_mod_log <- lm(sfr_log, dat1)
+summary(sfr_mod_log)
+
+#plot(sfr_mod_log)
+
+
+#--------------------------------------------------
+stargazer(sfr_mod_linear, sfr_mod_log, sfr_mod_bc, type="html", out="models.htm")
+
+```
+
+
+
+
+
