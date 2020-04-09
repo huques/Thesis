@@ -1,0 +1,144 @@
+---
+title: "Cleaning joined data"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Packages
+```{r}
+library(tidyverse)
+library(here)
+library(magrittr)
+```
+
+# Import joined thesis data
+```{r}
+df <- read.csv(here("DATA", "altered", "thesis_data3-7.csv"))
+
+constraints <- c("conAirHgt",
+                    "conCovrly", "conPovrly",
+                   "conHist", "conHistLdm", 
+                 "conLSHA", "conLUST",
+                   "conNoise", "conSewer", "conSLIDO",
+                   "conSlp25", "conStorm", "conTranCap", "conTranSub",
+                   "conTranInt", "conTranSub", "conWater", 
+                  "conPubOwn", "conFld100")
+# define helper function to switch NAs in the constraints to 0s
+to0 <- function(x){ifelse(is.na(x), 0, x)}
+
+
+# CREATE FLAG & ARMS LENGTH VARIABLES
+df %<>%
+  mutate(n_fireplaces = ifelse(is.na(n_fireplaces), 0, n_fireplaces), 
+         saledate = as.Date(saledate),
+         lnprice = log(SALEPRICE),
+         # define flags
+         proud_flag =  grepl("PROUD", OWNER1) | 
+           grepl("PROUD", OWNER2) | grepl("PROUD", OWNER3),
+         trust_flag = grepl("TRUST", OWNER1) | 
+           grepl("TRUST", OWNER2) | grepl("TRUST", OWNER3), 
+         top_1 =  SALEPRICE > quantile(SALEPRICE, .99),
+         price_diff = SALEPRICE - LANDVAL3, 
+         price_ratio = SALEPRICE/LANDVAL3 * 100,
+         vacant_dummy = PRPCD_DESC == "VACANT LAND",
+         
+         #make percentages
+         pct_canopy_cov = 100*pct_canopy_cov,
+         percent_vacant = 100*percent_vacant)
+
+#export to excel
+```
+
+
+# Drop observations
+```{r}
+df <- read.csv(here("DATA", "altered", "thesis-data_4-5.csv"))
+
+# MAKE DROPS
+trim <- df %>% 
+  filter(proud_flag == F, top_1 == F,
+           price_ratio > 100, vacant_dummy == F) %>%
+  mutate(YEARBUILT = as.numeric(YEARBUILT)) %>%
+  mutate(YEARBUILT = case_when(
+    YEARBUILT < 1000 ~ NA_real_,
+    YEARBUILT > 2019 ~ NA_real_,
+    TRUE ~ YEARBUILT))
+
+constraint_sums <- trim %>%
+  select(constraints) %>%
+  rowSums()
+
+trim %<>%
+  mutate(is_constrained = constraint_sums > 0)
+
+# ---------------
+# SQUARE FOOTAGE VARIABLES
+# garage sqft
+gar_sqft_sum <- trim %>%
+  select(matches("gar")) %>%
+  rowSums()
+
+# attic sqft
+attic_sqft_sum <- trim %>%
+  select(matches("attic")) %>%
+  rowSums()
+
+# basement sqft
+bsmt_sqft_sum <- trim %>%
+  select(matches("bsmt")) %>%
+  select(-c("BSMT.PARKING","BSMT.GAR")) %>%
+  rowSums()
+
+# define dummies
+trim %<>%
+  mutate(garage_sqft = gar_sqft_sum,
+         garage_dum = garage_sqft > 0,
+         attic_sqft = attic_sqft_sum,
+         attic_dum = attic_sqft > 0,
+         bsmt_sqft = bsmt_sqft_sum,
+         bsmt_dum = bsmt_sqft > 0,
+         year_sold = format(as.Date(saledate), "%Y"))
+```
+
+# Clean SFR
+```{r}
+sfr.dat <- trim %>%
+  filter(prop_type == "Single-family") %>%
+  mutate(empty_lot_flag = BLDGSQFT == 0, is.na(totalsqft),
+         maybe_mfr_flag = UNITS > 5 | f_baths > 10,
+         big_sqft_flag = BLDGSQFT > 10000,
+         big_bsmt_flag = bsmt_sqft > 9000,
+         big_area_flag = AREA > 100000) %>%
+        # dist_ugb = dist_ugb / 1000,
+        # AREA = AREA / 100,
+        # BLDGSQFT = BLDGSQFT/100) %>%
+    filter(empty_lot_flag == F,
+         maybe_mfr_flag == F, 
+         big_area_flag == F,
+         big_sqft_flag == F, 
+         price_ratio > 100)
+
+write.csv(sfr.dat, here("DATA", "sfr_clean_4-5.csv"))
+```
+
+# Clean MFR
+```{r}
+mfr.dat <- trim %>%
+  filter(prop_type == "Multi-family") %>%
+  filter(!(is.na(totalsqft) & BLDGSQFT == 0),
+         AREA < 100000) %>%
+  mutate(bldgsqft_imp = case_when(is.na(totalsqft) ~ BLDGSQFT,
+                                  BLDGSQFT == 0 ~ totalsqft,
+                                  TRUE ~ BLDGSQFT),
+         imputed = is.na(totalsqft)) 
+
+# how many missing fireplaces?
+# mfr.dat %>% filter(is.na(n_fireplaces)) %>% count
+write.csv(mfr.dat, here("DATA", "mfr_clean_4-5.csv"))
+```
+
+
+

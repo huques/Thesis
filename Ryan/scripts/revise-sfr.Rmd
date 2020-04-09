@@ -1,0 +1,144 @@
+---
+title: "Revise and Reestimate SFR"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load packages
+```{r}
+library(tidyverse)
+library(magrittr)
+library(here)
+library(sf)
+library(kableExtra)
+library(outreg)
+library(nlme)
+```
+
+# RE-ESTIMATE MODELS
+
+## Define functions for model analysis
+```{r}
+genFormula <- function(...){
+  string <- paste(c(...), collapse = " + ")
+  paste0("lnprice ~", string) %>% as.formula
+}
+
+# to check robustness to outliers
+estimateModels <- function(data, variables){
+  controls <- lm(genFormula(variables), data)
+  nbhd <- lm(genFormula(variables, "nbhd"), 
+                   data)
+  const <- lm(genFormula(variables, constraints), 
+                   data = data)
+  const.nbhd <- lm(genFormula(variables, constraints, "nbhd"), 
+                         data = data)
+  quad <- lm(genFormula(variables, "sextant"), 
+                         data = data)
+  const.quad <- lm(genFormula(variables, constraints, "sextant"), 
+                         data = data)
+  list(controls, quad, nbhd, const, const.quad, const.nbhd)
+}
+
+```
+
+
+## Fixed effect SFR tables
+```{R}
+fname <- here("Ryan", "figs", "tables", "big-table.xlsx")
+
+sfr_vars <- c("I(log(dist_cityhall))", "I(log(dist_ugb))", "h_baths",
+"f_baths", "AREA", "avgheight", "BLDGSQFT", "garage_dum","bsmt_dum",
+"pct_canopy_cov", "YEARBUILT", "n_fireplaces", "CN_score", "attic_dum", "year_sold",
+"percent_vacant", "I(AREA^2)", "I(BLDGSQFT^2)", "I(CN_score^2)")
+
+sfr_mods <- estimateModels(sfr.dat, sfr_vars)
+
+sfr_mods_tbl <- outreg::outreg(sfr_mods,
+               digits = 5L, alpha = c(0.05, 0.01),
+       bracket = c("se"), starred = c("coef"), robust = TRUE, small = F,
+       constlast = TRUE, norepeat = TRUE)
+
+colnames(sfr_mods_tbl) <- c("Variable", "Statistic",
+                               "SFR: No NBHD, No Constraints", 
+                         "SFR: NBHD, No Constraints",
+                         "SFR: No NBHD, Constraints",
+                         "SFR: NBHD, Constraints",
+                         "SFR: QUADS, No Constraints",
+                         "SFR: QUADS, Constraints")
+# export to xl
+xlsx::write.xlsx(sfr_mods_tbl, fname,
+                 sheetName = "SFR - FE Models", 
+                 append = FALSE)
+
+```
+
+## Estimation with Random Effects
+```{r}
+nona <- sfr.dat %>%
+  select(sfr_vars[sfr_vars %in% colnames(sfr.dat)], lnprice, dist_cityhall,
+         dist_ugb, nbhd,
+         constraints) %>%
+  na.omit
+
+re <- lme(genFormula(sfr_vars, constraints), random = ~ 1|nbhd,
+            data=nona,
+            method="REML") 
+                       
+re_tbl <- summary(re)$tTable %>%
+  as.data.frame %>%
+  mutate(Variable = rownames(.))
+
+sfr_mods_tbl <- outregChooseVars(sfr_tbl, constraints) %>%
+  select(Variable, Statistic, matches("Constraints")) %>% 
+  left_join(re_tbl %>% select(Variable, Value), by = "Variable") %>%
+  rename(RE = Value)
+
+# want to find number of nbhds within certain constraints, knowing that I am within
+# a neighborhood is the same as knowing that i am within a certain constraint
+
+findCollin <- function(data, var){
+  var <- enquo(var)
+  data %>%
+  select(nbhd, constraints) %>%
+  group_by(!!var, nbhd) %>%
+  filter(!!var == T) %>%
+  n_groups()
+}
+
+# findCollin(nona, conAirHgt)
+# findCollin(nona, conSewer)
+# findCollin(nona, conWater)
+# findCollin(nona, conPubOwn)
+# findCollin(nona, conNoise)
+# findCollin(nona, conHist)
+# findCollin(nona, conHistLdm)
+# findCollin(nona, conCovrly)
+# findCollin(nona, conPovrly)
+# findCollin(nona, conPrvCom)
+# findCollin(nona, conTranSub)
+# findCollin(nona, conSlp25)
+# findCollin(nona, conTranInt)
+# findCollin(nona, conTranCap)
+# findCollin(nona, conLSHA)
+# findCollin(nona, conSLIDO)
+```
+
+## SAR Model
+```{r}
+library(rspatial)
+library(raster)
+library(spdep)
+library(tidyverse)
+library(spatialreg)
+
+
+
+```
+
+
+
+

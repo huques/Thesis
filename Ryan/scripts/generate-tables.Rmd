@@ -1,0 +1,540 @@
+---
+title: "Tables"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(magrittr)
+library(here)
+library(kableExtra)
+```
+
+# set up full data frame
+```{r}
+#df <- read.csv(here("thesis_data3-7.csv"))
+
+constraints <- c("conWetland", "conAirHgt",
+                    "conCovrly", "conPovrly",
+                   "conHist", "conHistLdm", 
+                 "conLSHA", "conLUST",
+                   "conNoise", "conPrvCom", "conSewer", "conSLIDO",
+                   "conSlp25", "conStorm", "conTranCap", "conTranSub",
+                   "conTranInt", "conTranSub", "conWater", 
+                 "conGW", "conPubOwn", "conFld100_ft", "conECSI")
+# define helper function to switch NAs in the constraints to 0s
+to0 <- function(x){ifelse(is.na(x), 0, x)}
+# 
+# 
+# # CREATE FLAG & ARMS LENGTH VARIABLES
+# df %<>%
+#   rename(nbhd = NAME) %>%
+#   mutate(n_fireplaces = ifelse(is.na(n_fireplaces), 0, n_fireplaces), 
+#          saledate = as.Date(saledate),
+#          lnprice = log(SALEPRICE),
+#          
+#          # define flags
+#          proud_flag =  grepl("PROUD", OWNER1) | 
+#            grepl("PROUD", OWNER2) | grepl("PROUD", OWNER3),
+#          trust_flag = grepl("TRUST", OWNER1) | 
+#            grepl("TRUST", OWNER2) | grepl("TRUST", OWNER3), 
+#          top_1 =  SALEPRICE > quantile(SALEPRICE, .99),
+#          price_diff = SALEPRICE - LANDVAL3, 
+#          price_ratio = SALEPRICE/LANDVAL3 * 100,
+#          vacant_dummy = PRPCD_DESC == "VACANT LAND",
+#          
+#          #make percentages
+#          pct_canopy_cov = 100*pct_canopy_cov,
+#          percent_vacant = 100*percent_vacant)
+#------------------------- 
+
+df <- read.csv(here("DATA", "thesis-data_4-5.csv"))
+
+# MAKE DROPS
+trim <- df %>% 
+  filter(proud_flag == F, top_1 == F,
+           price_ratio > 100, vacant_dummy == F) %>%
+  mutate_at(vars(constraints), to0) %>%
+  mutate(YEARBUILT = as.numeric(YEARBUILT)) %>%
+  mutate(YEARBUILT = case_when(
+    YEARBUILT < 1000 ~ NA_real_,
+    YEARBUILT > 2019 ~ NA_real_,
+    TRUE ~ YEARBUILT))
+
+constraint_sums <- trim %>%
+  select(constraints) %>%
+  rowSums()
+
+trim <- trim %>%
+  mutate(is_constrained = constraint_sums > 0)
+
+# ---------------
+# SQUARE FOOTAGE VARIABLES
+# garage sqft
+gar_sqft_sum <- trim %>%
+  select(matches("gar")) %>%
+  rowSums()
+
+# attic sqft
+attic_sqft_sum <- trim %>%
+  select(matches("attic")) %>%
+  rowSums()
+
+# basement sqft
+bsmt_sqft_sum <- trim %>%
+  select(matches("bsmt")) %>%
+  select(-c("BSMT.PARKING","BSMT.GAR")) %>%
+  rowSums()
+
+# define dummies
+trim <- trim %>%
+  mutate(garage_sqft = gar_sqft_sum,
+         garage_dum = garage_sqft > 0,
+         attic_sqft = attic_sqft_sum,
+         attic_dum = attic_sqft > 0,
+         bsmt_sqft = bsmt_sqft_sum,
+         bsmt_dum = bsmt_sqft > 0,
+         year_sold = format(as.Date(saledate), "%Y"))
+         
+
+
+# ---------------
+```
+
+## clean MFR
+```{r, cache = F,  include=FALSE}
+mfr.dat <- trim %>%
+  filter(prop_type == "Multi-family")
+
+# how many missing fireplaces?
+mfr.dat %>% filter(is.na(n_fireplaces)) %>% count
+
+mfr.dat %<>%
+  filter(!(is.na(totalsqft) & BLDGSQFT == 0),
+         AREA < 100000) %>%
+  mutate(bldgsqft_imp = case_when(is.na(totalsqft) ~ BLDGSQFT,
+                                  BLDGSQFT == 0 ~ totalsqft,
+                                  TRUE ~ BLDGSQFT),
+         imputed = is.na(totalsqft)) 
+        # dist_cityhall = dist_cityhall/1000,
+        # dist_ugb = dist_ugb / 1000,
+        # AREA = AREA / 100,
+         # bldgsqft_imp = bldgsqft_imp / 100)
+
+# define outliers (these keep changing as i change outlier definitions above
+# should use stateid insteadddd)
+mfr.outliers <- c(849, 1186)
+funkypts <- c(4182, 2839, 4189, 1137, 713, 459, 1893)
+```
+
+## clean SFR
+```{r, cache = T,  include=FALSE}
+sfr.dat <- trim %>%
+  filter(prop_type == "Single-family")
+dim(sfr.dat)
+sfr.dat %<>%
+  mutate(empty_lot_flag = BLDGSQFT == 0, is.na(totalsqft),
+         maybe_mfr_flag = UNITS > 5 | f_baths > 10,
+         big_sqft_flag = BLDGSQFT > 10000,
+         big_bsmt_flag = bsmt_sqft > 9000,
+         big_area_flag = AREA > 100000) %>%
+        # dist_ugb = dist_ugb / 1000,
+        # AREA = AREA / 100,
+        # BLDGSQFT = BLDGSQFT/100) %>%
+    filter(empty_lot_flag == F,
+         maybe_mfr_flag == F, 
+         big_area_flag == F,
+         big_sqft_flag == F,
+         price_ratio > 100)
+```
+
+
+### define pretty formula and table helper functions
+```{r, cache = T,  include=FALSE}
+# input a vector of strings tht are the names of variables
+genFormula <- function(...){
+  string <- paste(c(...), collapse = " + ")
+  paste0("lnprice ~", string) %>% as.formula
+}
+
+# cut out parts of the outreg table (to avoid spitting out coefs of the nbhds)
+outregChooseVars <- function(table, vars, withEndStats = T){
+  i <- table %>% pull(Variable) %in% vars %>% which
+  print(i)
+  indicies <- seq(from = i[1], to = i[length(i)] + 1)
+  if(withEndStats){
+    n <- nrow(table)
+    indicies <- c(indicies, (n-4):n)
+  }
+  table[indicies,]
+}
+```
+
+
+# ~~MFR~~ 
+
+## MFR: define control variables and estimate models
+```{r, cache = T,  include=FALSE}
+mfr_vars <- c("I(log(dist_cityhall))", "I(log(dist_ugb))", "h_baths",
+"f_baths", "AREA", "avgheight", "garage_dum","bsmt_dum",
+"pct_canopy_cov", "YEARBUILT", "CN_score", "attic_dum", "year_sold", "n_fireplaces",
+"percent_vacant", "UNITS", "bldgsqft_imp", "I(bldgsqft_imp^2)", "I(AREA^2)", "I(f_baths^2)")
+
+
+m1.mf <- lm(genFormula(mfr_vars), mfr.dat[-funkypts,])
+m2.nbhd.mf <- lm(genFormula(mfr_vars, "nbhd"), 
+                 mfr.dat[-funkypts,])
+m3.const.mf <- lm(genFormula(mfr_vars, constraints), 
+                  data = mfr.dat[-funkypts,])
+m4.const.nbhd.mf <- lm(genFormula(mfr_vars, constraints, "nbhd"), 
+                       data = mfr.dat[-funkypts,])
+plot(m4.const.nbhd.mf)
+```
+
+## MFR: write models to table using outreg package
+```{r echo=FALSE, eval=F, include = F}
+mfr.table <- outreg::outreg(list(m3.const.mf, m1.mf, m4.const.nbhd.mf, m2.nbhd.mf), 
+               digits = 5L, alpha = c(0.05, 0.01),
+       bracket = c("se"), starred = c("coef"), robust = TRUE, small = F,
+       constlast = TRUE, norepeat = TRUE) %>%
+    rename(Stat = .stat) %>%
+    mutate(Stat = ifelse(Stat %in% c("Estimate", "Std Err"), "", Stat))
+
+
+colnames(mfr.table) <- c("Variable", "Statistic",
+                               "No Spatial Dummies, Constraints", 
+                         "No Spatial Dummies, No Constraints",
+                         "Spatial Dummies, Constraints",
+                         "Spatial Dummies, No Constraints")
+
+
+mfr.controls <- outregChooseVars(mfr.table, mfr_vars)
+mfr.constraints <-  outregChooseVars(mfr.table, constraints) %>%
+  select(-matches("no constraints"))
+
+mfr.constraints %>%
+  kable("latex", booktabs = T, row.names = F,
+        label = "MFR Controls Regression") %>% 
+  kable_styling(full_width = F)
+
+mfr.controls %>%
+  kable("latex", booktabs = T, row.names = F) %>% 
+  kable_styling(full_width = T)
+```
+
+
+# ~SFR~
+
+## SFR: define control variables and estimate models
+```{r cache=T}
+sfr_vars <- c("I(log(dist_cityhall))", "I(log(dist_ugb))", "h_baths",
+"f_baths", "AREA", "avgheight", "BLDGSQFT", "garage_dum","bsmt_dum",
+"pct_canopy_cov", "YEARBUILT", "n_fireplaces", "CN_score", "attic_dum", "year_sold",
+"percent_vacant", "I(AREA^2)", "I(BLDGSQFT^2)", "I(CN_score^2)")
+
+# m1.sf <- lm(genFormula("is_constrained", sfr_vars), data = sfr.dat)
+# m2.nbhd.sf <- lm(genFormula("is_constrained", sfr_vars, "nbhd"), data = sfr.dat)
+# m3.const.sf <- lm(genFormula(sfr_vars, constraints), data = sfr.dat)
+# m4.const.nbhd.sf <- lm(genFormula(sfr_vars, constraints, "nbhd"), data = sfr.dat)
+# plot(m4.const.nbhd.sf)
+```
+
+## SFR: write regression output using outreg
+```{r, eval = F, include=F}
+# use robust standard errors
+sfr.table <- outreg::outreg(list(m3.const.sf, m1.sf, m4.const.nbhd.sf, m2.nbhd.sf),
+               digits = 5L, alpha = c(0.05, 0.01),
+       bracket = c("se"), starred = c("coef"), robust = TRUE, small = F,
+       constlast = TRUE, norepeat = TRUE) %>%
+  mutate(Stat = ifelse(.stat %in% c("Estimate", "Std Err"), "", .stat)) %>%
+  select(-7)
+
+colnames(sfr.table) <- c("Variable", "Statistic", 
+                               "No Spatial Dummies, Constraints", 
+                         "No Spatial Dummies, No Constraints",
+                         "Spatial Dummies, Constraints",
+                         "Spatial Dummies, No Constraints")
+
+# grab the controls from outreg, get rid of stat column bc not presenting
+# r sq with the controls
+sfr.controls <- outregChooseVars(sfr.table, sfr_vars, withEndStats = F) %>%
+  select(-c(Statistic))
+
+# grab only the constraints from outreg output
+sfr.constraints <- outregChooseVars(sfr.table, constraints) %>%
+  select(-matches("no constraints"))
+
+# write.csv(sfr.constraints, here::here("Ryan", "figs", "tables",
+#                                       "sfr-constraints.csv"))
+
+# produce 4 model tables for SFR constraints...
+sfr.constraints %>%
+  kable("latex", booktabs = T, row.names = F,
+        caption = "SFR Constraints Regression") %>% 
+  kable_styling(full_width = F)
+
+#... and controls
+sfr.controls %>%
+  kable("latex", booktabs = T, row.names = F) %>% 
+  kable_styling(full_width = T)
+```
+
+# sum stats
+
+```{r, eval = F}
+n_mfr_constraints <- mfr.dat %>%
+  select(matches("con")) %>%
+  select_if(is.numeric) %>%
+  select(-contains("pct")) %>% colSums(na.rm = T)
+
+n_sfr_constraints <- sfr.dat %>%
+  select(matches("con")) %>%
+  select_if(is.numeric) %>%
+  select(-contains("pct")) %>% colSums(na.rm = T)
+
+sfr.con <- sfr.dat %>%
+  select(matches("con")) %>%
+  select_if(is.numeric) %>%
+  select(-contains("pct")) 
+constraints <- sfr.con %>% colnames
+
+# constraint counts
+data.frame(Constraint = c(constraints),
+           SFR = n_sfr_constraints, 
+           MFR = n_mfr_constraints) %>%
+    kable("latex", booktabs = T, row.names = F, 
+          caption = "Constraint Counts") %>% 
+  kable_styling(full_width = F)
+```
+
+
+# cts vars sum stats
+Pretty summary stats table function. It produces a data.frame/tibble that can be wrapped in kable/kableExtra, written to an excel file, etc. 
+
+```{r}
+pullVarname <- function(vars){
+  sapply(vars, gsub, pattern = "\\(|\\)|I\\(|log|\\^2", replace = "") %>%
+    unique()
+}
+
+getDesc <- function(vars){
+    crosswalk <- data.frame(desc = c("Number of half baths", "Number of full baths", 
+            "Number of fireplaces", "Basement dummy",
+            "Garage dummy", "Attic dummy", "Year sold", "Year property was built",
+            "Percent canopy coverage", 
+            "Percent of properties within a \n 200 ft. radius that are vacant",
+            "Distance to nearest portion \n of urban growth boundary",
+            "Distance to city hall", "Lot square footage", "Average building height",
+            "Total building square footage", "Imputed building square footage",
+            "Complete Neighborhoods score",
+            "Number of units"),
+            
+            var = c("h_baths", "f_baths", "n_fireplaces", 
+         "bsmt_dum", "garage_dum", "attic_dum", 
+         "year_sold", "YEARBUILT", 
+         "pct_canopy_cov", "percent_vacant", 
+         "dist_ugb", "dist_cityhall", "AREA", "avgheight", 
+         "BLDGSQFT", "bldgsqft_imp", "CN_score", "UNITS"))
+    
+    crosswalk %>% filter(var %in% vars) %>% pull(desc)
+}
+
+summaryTable <- function(data, vars){
+  stopifnot(is.data.frame(data))
+  require(magrittr)
+  require(purrr)
+  data %<>%
+  select(vars[vars %in% colnames(data)], dist_cityhall, dist_ugb) %>%
+  select("h_baths", "f_baths", "n_fireplaces", 
+         "bsmt_dum", "garage_dum", "attic_dum", 
+         "year_sold", "YEARBUILT", 
+         "pct_canopy_cov", "percent_vacant", 
+         "dist_ugb", "dist_cityhall", everything()) %>%
+    mutate_if(is.logical, ~.*1) %>%
+    mutate(year_sold = as.numeric(year_sold))
+  
+  mean <- sapply(data, mean, na.rm = T)
+  sd <- sapply(data, sd, na.rm = T)
+  median <- sapply(data, median, na.rm = T)
+  max <- sapply(data, max, na.rm = T)
+  min <- sapply(data, min, na.rm = T)
+  data.frame(Statistic = colnames(data),
+             Description = colnames(data) %>% getDesc(),
+            Mean = mean,
+            St.Dev. = sd,
+             Median = median,
+             Min = min,
+             Max = max) %>%
+    mutate(Min = round(Min, 3),
+           Mean = ifelse(Statistic %in% c('YEARBUILT',"year_sold"),
+                         floor(Mean), Mean)) %>%
+    mutate_if(is.numeric, ~round(., digits = 3) %>%
+                format(., trim = T, digits = 3, 
+                                  width = 5, scientific = F,
+                                  drop0trailing = T))
+}
+
+# sfr sum stats
+summaryTable(sfr.dat, sfr_vars) %>%
+  kable("latex", booktabs = T, row.names = F) %>%
+  kable_styling(full_width = T)
+
+#mfr sum stats
+summaryTable(mfr.dat, mfr_vars) %>%
+  kable %>%
+  kable_styling(full_width = F)
+
+```
+
+
+# sum stat independent variable: prices
+Grouped summary stats
+
+```{r echo=FALSE, eval=F, include = F}
+df <- bind_rows(mfr.dat, sfr.dat)
+
+m.price.stats <- df %>% filter(prop_type == "Multi-family") %>%
+  pull(SALEPRICE) %>% summary()
+
+s.price.stats <- sfr.dat %>%
+  pull(SALEPRICE) %>% summary()
+
+bind_rows(s.price.stats, m.price.stats) %>%
+  mutate("Property Type" = c("SFR", "MFR")) %>%
+  select("Property Type", everything()) %>%
+  kable() %>%
+  # kable("latex", booktabs = T, row.names = F,
+  #       caption = "") %>%
+  kable_styling(full_width = F)
+```
+
+
+# plots
+These were plotted then saved into the plots folder, not running this here...
+```{r}
+
+```
+
+# non linearities
+```{r}
+
+
+```
+
+# mfr constraints
+```{r, eval = F}
+mfr.constraints %>%
+  kable("latex", booktabs = T, row.names = F,
+        label = "MFR Controls Regression") %>% 
+  kable_styling(full_width = F)
+```
+
+# robustness function 
+(so I change input data & reestimate the 4 models quickly)
+
+```{r}
+estimateModels <- function(data, variables){
+  controls <- lm(genFormula(variables), data)
+  nbhd <- lm(genFormula(variables, "nbhd"), 
+                   data)
+  const <- lm(genFormula(variables, constraints), 
+                   data = data)
+  const.nbhd <- lm(genFormula(variables, constraints, "nbhd"), 
+                         data = data)
+  quad <- lm(genFormula(variables, "sextant"), 
+                         data = data)
+  const.quad <- lm(genFormula(variables, constraints, "sextant"), 
+                         data = data)
+  list(controls, quad, nbhd, const, const.quad, const.nbhd)
+}
+
+```
+
+
+# SFR: regression table, latex style: single, quadrants, nbhd
+```{r}
+sfr_mods <- estimateModels(sfr.dat, sfr_vars)
+sfr_tbl <- outreg::outreg(sfr_mods,
+               digits = 5L, alpha = c(0.05, 0.01),
+       bracket = c("se"), starred = c("coef"), robust = TRUE, small = F,
+       constlast = TRUE, norepeat = TRUE)
+
+colnames(sfr_tbl) <- c("Variable", "Statistic",
+                       "Base controls", "Quadrant", "Nbhd", 
+                       "Base constraints", "Constraints + quadrant", 
+                       "Constraints + nbhd")
+
+outregChooseVars(sfr_tbl, constraints) %>%
+  select(Variable, Statistic, matches("Constraints")) %>%
+  kable("latex", booktabs = T, row.names = F) %>% 
+  kable_styling(full_width = T)
+
+outregChooseVars(sfr_tbl, sfr_vars, F) %>%
+  select(-Statistic) %>%
+  kable("latex", booktabs = T, row.names = F) %>% 
+  kable_styling(full_width = T)
+```
+
+# MFR: regression table, latex style: single, quadrants, nbhd
+```{r}
+mfr_mods <- estimateModels(mfr.dat, mfr_vars)
+mfr_tbl <- outreg::outreg(mfr_mods,
+               digits = 5L, alpha = c(0.05, 0.01),
+       bracket = c("se"), starred = c("coef"), robust = TRUE, small = F,
+       constlast = TRUE, norepeat = TRUE)
+
+colnames(sfr_tbl) <- c("Variable", "Statistic",
+                       "Base controls", "Quadrant", "Nbhd", 
+                       "Base constraints", "Constraints + quadrant", 
+                       "Constraints + nbhd")
+
+outregChooseVars(mfr_tbl, constraints) %>%
+  select(Variable, Statistic, matches("Constraints")) %>%
+  kable("latex", booktabs = T, row.names = F) %>% 
+  kable_styling(full_width = T)
+
+outregChooseVars(mfr_tbl, mfr_vars, F) %>%
+  select(-Statistic) %>%
+  kable("latex", booktabs = T, row.names = F) %>% 
+  kable_styling(full_width = T)
+```
+
+# export one big happy regression table
+```{r, eval = F}
+fname <- here("Ryan", "figs", "tables", "big-table.xlsx")
+
+with_outliers_tbl <- outreg::outreg(c(sfr_w_outliers, mfr_w_outliers), 
+               digits = 5L, alpha = c(0.05, 0.01),
+       bracket = c("se"), starred = c("coef"), robust = TRUE, small = F,
+       constlast = TRUE, norepeat = TRUE)
+
+colnames(with_outliers_tbl) <- c("Variable", "Statistic",
+                               "SFR: No Dummies, No Constraints", 
+                         "SFR: Dummies, No Constraints",
+                         "SFR: No Dummies, Constraints",
+                         "SFR: Spatial Dummies, Constraints",
+                         "MFR: No Dummies, No Constraints", 
+                         "MFR: Dummies, No Constraints",
+                         "MFR: No Dummies, Constraints",
+                         "MFR: Spatial Dummies, Constraints")
+
+no_outliers_tbl <- outreg::outreg(c(mfr_no_outliers), 
+               digits = 5L, alpha = c(0.05, 0.01),
+       bracket = c("se"), starred = c("coef"), robust = TRUE, small = F,
+       constlast = TRUE, norepeat = TRUE)
+
+colnames(no_outliers_tbl) <- c("Variable", "Statistic",
+                               "MFR: No Dummies, No Constraints", 
+                         "MFR: Dummies, No Constraints",
+                         "MFR: No Dummies, Constraints",
+                         "MFR: Spatial Dummies, Constraints")
+
+# export to xl
+xlsx::write.xlsx(with_outliers_tbl, fname,
+                 sheetName = "Outliers2", append = TRUE)
+
+xlsx::write.xlsx(no_outliers_tbl, fname,
+                 sheetName = "No Outliers2", append = TRUE)
+```
+
