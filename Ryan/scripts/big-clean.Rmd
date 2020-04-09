@@ -49,7 +49,8 @@ df %<>%
          pct_canopy_cov = 100*pct_canopy_cov,
          percent_vacant = 100*percent_vacant)
 
-#export to excel
+#export to csv
+#write.csv(df, here("DATA", "altered", "thesis-data_4-5.csv"))
 ```
 
 
@@ -121,7 +122,7 @@ sfr.dat <- trim %>%
          big_sqft_flag == F, 
          price_ratio > 100)
 
-write.csv(sfr.dat, here("DATA", "sfr_clean_4-5.csv"))
+#write.csv(sfr.dat, here("DATA", "altered", "sfr_clean_4-5.csv"))
 ```
 
 # Clean MFR
@@ -137,7 +138,7 @@ mfr.dat <- trim %>%
 
 # how many missing fireplaces?
 # mfr.dat %>% filter(is.na(n_fireplaces)) %>% count
-write.csv(mfr.dat, here("DATA", "mfr_clean_4-5.csv"))
+# write.csv(mfr.dat, here("DATA", "altered", "mfr_clean_4-5.csv"))
 ```
 
 
