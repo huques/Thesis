@@ -16,7 +16,7 @@ library(magrittr)
 
 # Import joined thesis data
 ```{r}
-df <- read.csv(here("DATA", "altered", "thesis_data3-7.csv"))
+df <- read.csv(here("DATA", "altered", "thesis-data.csv"))
 
 constraints <- c("conAirHgt",
                     "conCovrly", "conPovrly",
