@@ -882,3 +882,8 @@ fugly <- left_join(fugly, zones_over_time, by = "STATE_ID")
 print(paste0("zone Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$Freq > 1))))
 ```
 
+## Export full data frame
+```{R}
+#write.csv(df, here("DATA", "altered", "thesis_data.csv"))
+```
+
