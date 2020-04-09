@@ -1,0 +1,79 @@
+---
+title: "Houses from Outer Space"
+author: Ryan Kobler
+output: beamer_presentation
+---
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(message = FALSE, fig.align = "center")
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(knitr)
+```
+
+
+
+
+# 1 of many thesis problems
+
+Goal: estimate the value added or subtrated from a few dozen environmental land constraints
+
+Method: let's use the hedonic price method and estimate the effect of each constraint with OLS! Not so fast...
+
+---
+
+![Spatial lag](figs/spatial-lag.png "Spatial lag")
+
+
+
+# What is spatial autocorrelation?
+- The degree to which two observations at a spatial location are similar to one another
+
+
+
+
+# What breaks?
+
+- *Lag:* how do neighboring property values affect me
+  - Biased coefficient estimates from OLS
+  
+- *Correlated errors:* model over/under predicts in spatial clusters
+  - OLS p-values can't be trusted! :-(
+
+
+# Potential remedies
+
+- Spatial dummies for local neighborhoods
+  - Ex: census tracts, neighborhood associations, zip codes, school districts
+  - Can mitigate omitted-variable bias
+  - Tradeoff shrinking nbhd size reduces bias but reduces identifying variation in amenity (increasing variance)
+  
+- Model the correlation explicitly using spatial error or lag models
+
+
+
+
+# Option 1
+
+![Dummy boundaries](figs/within-nbhd-variation.png "Neighborhood boundaries")
+
+
+
+---
+
+![Residual map no spatial dummies](figs/resid-no-fe-map.png "Residual map - no FE")
+
+---
+
+![Residual map with spatial dummies](figs/resid-fe.png "Residual map - FE")
+
+- This looks better, but is there still evidence of correlation?
+
+# Use Moran I 
+
+
+
+
+
+

@@ -1,0 +1,376 @@
+---
+title: "Multi-family Residential Analysis"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(here)
+library(tidyverse)
+library(cowplot)
+library(magrittr)
+library(kableExtra)
+```
+
+```{r warning=FALSE}
+df <- read.csv(here("thesis_data3-7.csv"))
+
+# TIDY
+df %<>%
+  rename(nbhd = NAME) %>%
+  mutate(n_fireplaces = ifelse(is.na(n_fireplaces), 0, n_fireplaces))
+
+
+# DROPS
+df %<>%
+  mutate(saledate = as.Date(saledate),
+         lnprice = log(SALEPRICE),
+         # define flags
+         proud_flag =  grepl("PROUD", OWNER1) | 
+           grepl("PROUD", OWNER2) | grepl("PROUD", OWNER3),
+         trust_flag = grepl("TRUST", OWNER1) | 
+           grepl("TRUST", OWNER2) | grepl("TRUST", OWNER3), 
+         top_1 =  SALEPRICE > quantile(SALEPRICE, .99),
+         price_diff = SALEPRICE - LANDVAL3, 
+         price_ratio = SALEPRICE/LANDVAL3 * 100,
+         vacant_dummy = PRPCD_DESC == "VACANT LAND") %>%
+  mutate(arms_length = price_ratio > 20)
+
+constraints <- c("conWetland", "conNatAm", 
+                   "conAirHgt", "conCovrly", "conPovrly", "conHeliprt",
+                   "conHist", "conHistLdm", "conInstit", 
+                 "conLSHA", "conLUST",
+                   "conNoise", "conPrvCom", "conSewer", "conSLIDO",
+                   "conSlp25", "conStorm", "conTranCap", "conTranSub",
+                   "conTranInt", "conTranSub", "conWater", 
+                 "conGW", "conPubOwn", "conFld100", "conECSI")
+
+
+# switch the NAs in the constraints to 0s
+to0 <- function(x){ifelse(is.na(x), 0, x)}
+
+trim <- df %>% 
+  filter(proud_flag == F, top_1 == F,
+           arms_length == T, vacant_dummy == F) %>%
+  mutate_at(vars(constraints), to0) %>%
+  mutate(YEARBUILT = as.numeric(YEARBUILT)) %>%
+  mutate(YEARBUILT = case_when(
+    YEARBUILT < 1000 ~ NA_real_,
+    YEARBUILT > 2019 ~ NA_real_,
+    TRUE ~ YEARBUILT))
+
+constraint_sums <- trim %>%
+  select(constraints) %>%
+  rowSums()
+
+trim %<>%
+  mutate(is_constrained = constraint_sums > 0)
+
+gar_sqft_sum <- trim %>%
+  select(matches("gar")) %>%
+  rowSums()
+
+# attic sqft
+attic_sqft_sum <- trim %>%
+  select(matches("attic")) %>%
+  rowSums()
+
+# basement sqft
+bsmt_sqft_sum <- trim %>%
+  select(matches("bsmt")) %>%
+  select(-c("BSMT.PARKING","BSMT.GAR")) %>%
+  rowSums()
+
+trim %<>%
+  mutate(garage_sqft = gar_sqft_sum,
+         garage_dum = garage_sqft > 0,
+         attic_sqft = attic_sqft_sum,
+         attic_dum = attic_sqft > 0,
+         bsmt_sqft = bsmt_sqft_sum,
+         bsmt_dum = bsmt_sqft > 0,
+         year_sold = format(saledate, "%Y"))
+
+mfr.dat <- trim %>%
+  filter(prop_type == "Multi-family")
+```
+
+
+## Looking for trends 
+```{r}
+cts_vars <- c("dist_cityhall", "dist_ugb", "UNITS", "h_baths",
+"f_baths", "totalsqft", "AREA", "avgheight", "garage_sqft","bsmt_sqft",
+"pct_canopy_cov", "YEARBUILT", "CN_score", "attic_sqft", "BLDGSQFT", "pct_conCovrly",
+"percent_vacant")
+
+plotCts <- function(string, df){
+  ggplot(data = df, 
+                         aes(y = lnprice, 
+                             x = get(string))) +
+    geom_jitter(alpha = 0.4) +
+    geom_smooth() +
+    labs(title = "",
+         y = "sale price",
+         x = string) + 
+    theme_minimal() %>% list()
+}
+
+# plot_list <- lapply(cts_vars, plotCts, df = mfr.dat)
+# names(plot_list) <- cts_vars
+
+# cowplot::plot_grid(plotlist = plot_list[1:4], ncol = 2, nrow = 2)
+# cowplot::plot_grid(plotlist = plot_list[5:8], ncol = 2, nrow = 2)
+# cowplot::plot_grid(plotlist = plot_list[9:12], ncol = 2, nrow = 2)
+#plot_list["BLDGSQFT"]
+```
+
+
+## Detecting outliers
+There are 143 properties where assessed land value in market year three is less than the sale price. Let's check out the qqplots from the models for each data frame. 
+
+```{r}
+# check which defn of arms-length i'm using; 
+mfr.dat %>%
+  filter(price_ratio < 100) %>% count()
+
+# define histogram plotting function
+plotHist <- function(string, binthere = 100, dfthat){
+  ggplot(data = dfthat, aes(x = get(string))) +
+    geom_histogram(binwidth = binthere) +
+    labs(title = "",
+         x = string) + 
+    theme_minimal() %>% list()
+}
+
+
+# plot_list <- lapply(cts_vars, plotHist, dfthat = mfr.dat, binthere = 100)
+# names(plot_list) <- cts_vars
+# 
+# plotHist("UNITS", binthere = 2, dfthat = mfr.dat)
+# 
+# cowplot::plot_grid(plotlist = plot_list[1:4], ncol = 2, nrow = 2)
+# cowplot::plot_grid(plotlist = plot_list[5:8], ncol = 2, nrow = 2)
+# cowplot::plot_grid(plotlist = plot_list[9:12], ncol = 2, nrow = 2)
+
+#------------------------------
+```
+
+
+
+# Summary Stats of Continuous Variables
+```{R}
+control_vars <- c("dist_cityhall", "dist_ugb", 
+"f_baths", "totalsqft", "AREA", "avgheight", "garage_sqft","bsmt_dum",
+"pct_canopy_cov", "YEARBUILT", "CN_score", "BLDGSQFT", "h_baths", 
+"percent_vacant", "attic_dum", "year_sold", "UNITS" )
+
+mfr.dat %>%
+  select(control_vars[control_vars %in% colnames(mfr.dat)], totalsqft) %>%
+  summary()
+
+```
+We have 297 observations for which BLDGSQFT == 0.
+
+**avgheight** there are some crazy outliers here (> 60), note that there are also 907 data points that are missing for this var. Wish we could get a sense of the level of floors a property has, may be more important for MFR...
+
+**bsmt_sqft** again, some big outliers > 10000 sqft (this may be because they include both finished an unfinished segments at different points in time?)
+
+**totalsqft** bigger than 75,000 seems kind of unreasonable.
+
+**pct_canopy_cov** some heteroskedasticity in this variable, decreasing variance as pct covered increases. Maybe log it?
+
+
+## Transformations to mfr.dat
+
+This removes outliers and points of high leverage, drops based upon AREA criteria, and imputes building square footage. 
+
+Results in a grand total of 23 observations from the data frame. Giving us 
+```{R}
+# MFR transformations
+mfr.dat <- trim %>%
+  filter(prop_type == "Multi-family")
+
+# found thru cook's dist plots
+outliers <- c(849, 1186)
+
+# remove observations where total sqft and building sqft are missing
+# generate imputed building square footage variable
+mfr.dat %<>%
+  filter(!(is.na(totalsqft) & BLDGSQFT == 0),
+         AREA < 150000) %>%
+  mutate(bldgsqft_imp = case_when(is.na(totalsqft) ~ BLDGSQFT,
+                                  BLDGSQFT == 0 ~ totalsqft,
+                                  TRUE ~ BLDGSQFT),
+         imputed = is.na(totalsqft))
+
+# remove outliers
+mfr.dat <- mfr.dat[-outliers,]
+
+# mfr.dat %<>%
+#   filter(bsmt_sqft < 100000 & totalsqft < 75000 & avgheight < 60) %>%
+#   filter(!(is.na(totalsqft) &  BLDGSQFT == 0)) 
+mfr.dat %>% count
+```
+
+
+# Fit models
+Remove fireplaces, use imputed building square footage variable, add units
+
+```{r}
+# list of variable names to include, minus dependent
+#control_vars <- colnames(no_fe_c$model)[-c(1, 20:40)]
+
+# add mfr vars to sfr controls (add quad terms)
+control_vars <- c(control_vars, "UNITS", "bldgsqft_imp", "I(bldgsqft_imp^2)", "I(AREA^2)", "I(f_baths^2)")
+
+# remove fireplaces and tl BLDGSQFT from sfr controls
+control_vars <- setdiff(control_vars, c("BLDGSQFT", "I(BLDGSQFT^2)", "n_fireplaces"))
+```
+
+## Define model functions
+```{r}
+getModelSum <- function(f, df){
+  lm(f, data = df) %>% summary()
+}
+
+# input a vector of strings tht are the names of variables
+genFormula <- function(...){
+  string <- paste(c(...), collapse = " + ")
+  paste0("lnprice ~", string) %>% as.formula
+}
+```
+
+
+## M1: Baseline, no constraints, fixed effects, only controls
+Using the imputed building sqft variable increases the R^2 adjusted to 0.62 from 0.58 and increases our sample size to ~3200. 
+
+```{r}
+m1 <- lm(genFormula(control_vars), mfr.dat)
+summary(m1)
+
+# check the square footage relationships
+# plotCts("bldgsqft_imp", mfr.dat)
+# plotCts("UNITS", mfr.dat)
+# plotCts("AREA", mfr.dat)
+```
+
+**UNITS** interestingly, when controlling for size of the building and avgheight, we can see that UNITS becomes negative. It's possible that the squarefootage variables are already getting at this, so an additional unit holding the square footage constant may decrease the value of the apartment complex. This is similar reasoning to why bedrooms are typically excluded from hedonic analyses.
+
+**sale_zone** does not add much in terms of adjusted $R^2$. This may be a good candidate to be removed, especially after adding spatial dummies. 
+
+**AREA^2** even though the trend looks to be quadratic, this may be due to just a few outliers, thus I might consider removing this control from the model. 
+
+**CN_score** as we can see, walkscore has a larger magnitude in this case than in the SFR counterpart. Maybe this is because in multifamily apartment housing, access to amenities is more important. 
+
+
+### M1: Diagnostics
+
+```{r}
+plot(m1)
+```
+
+From the scale location plot above, looks like we're over predicting for higher values of sale price. Let's see if this is still an issue once adding in spatial dummies. 
+
+
+## M2: Spatial dummies
+
+```{r}
+m2 <- lm(genFormula(control_vars, "nbhd"), mfr.dat)
+summary(m2)
+
+# check the square footage relationships
+# plotCts("bldgsqft_imp", mfr.dat)
+# plotCts("UNITS", mfr.dat)
+# plotCts("AREA", mfr.dat)
+plot(m2)
+```
+
+As we can see, adding spatial dummies doesn't fully correct the fact that predictions get consistently worse at higher property values. Could these be outliers? Let's check a histogram of log of sale price.
+
+### Aside--Distribution of sale price in sample 
+
+```{R}
+ggplot(aes(x = lnprice), data = mfr.dat) + geom_histogram() 
+#ggplot(aes(x = lnprice), data = sfr.dat) + geom_histogram() 
+
+
+summary(mfr.dat$lnprice)
+```
+
+From the figure above, it appears that log of prices has a larger right tail, and a look at the summary statistics tells us that the mean and median are pretty close together, so there is not a ton of skew happening. So why is the model over-predicting for values on the right end of the distribution? 
+
+Another thing we can check is the arms-length criteria:
+
+### Alternate defn of arms length
+
+Ok so defining arms length as landvalue less than the sale price makes the QQ plot better and skyrockets our R^2, but the scale-location plot still indicates heteroskedasticity is present in the model. Therefore use cluster robust errors and continue adding constraints. let's check out sum stats on these controls & possibly remove extreme values.
+
+```{R}
+mfr.dat %<>% 
+  filter(price_ratio > 100)
+
+
+funkypts <- c(4182, 2839, 4189, 1137, 713, 459, 1893)
+# look at which points you're thinking of removing to make model assumptions hold
+mfr.dat[funkypts,] %>%
+    select(subset(colnames(m2$model), colnames(m2$model) %in% colnames(mfr.dat)))
+
+# reestimate m1
+m1 <- lm(genFormula(control_vars), mfr.dat[-funkypts,])
+summary(m1)
+plot(m1)
+
+# reestimate m2
+m2 <- lm(genFormula(control_vars, "nbhd"), mfr.dat[-funkypts,])
+summary(m2)
+plot(m2)
+
+# look at sum stats with these points removed
+mfr.dat %>% 
+  select(subset(colnames(m2$model), colnames(m2$model) %in% colnames(mfr.dat))) %>%
+  summary
+
+# funkyresidpts <- c(713, 3023, 3702, 145, 388)
+# 
+# mfr.dat[funkyresidpts,] %>% 
+#   select(subset(colnames(m2$model), colnames(m2$model) %in% colnames(mfr.dat)))
+# 
+# 
+# ggplot(aes(x = avgheight), data = mfr.dat) + geom_histogram(binwidth = 1) 
+```
+
+Ok the weird values have a shit ton of baths so let's add a quadratic term... I don't think that taking the outliers out is good practice. They aren't extreme in most dimensions.
+
+## M3: Adding constraints to m1 and m2
+```{r}
+m3 <- lm(genFormula(control_vars, constraints), data = mfr.dat[-funkypts,])
+summary(m3)
+
+m4 <- lm(genFormula(control_vars, "nbhd", constraints), data = mfr.dat[-funkypts,])
+summary(m4)
+```
+
+FE $R^2_{adj} = 0.793$, no FE $R^2_{adj} = 0.756$. Note that not all neighborhood fixed effects are significant as they were in the SFR model. Our sample size here is around 3,000, and strikingly walkscore matters more here, even with neighborhoods taken into account. 
+
+# Robustness
+
+## Test robustness of estimates to different spatial sizes
+
+## K-fold CV 
+
+## Price ratio (pruning out arms-length)
+
+
+## Explore Random Effects
+
+## Explore Hausman Taylor
+
+## Test for spatial lag between our $y$s 
+This matters more in terms of bias.
+
+
+
+## Mapping spatially correlated errors
+
+

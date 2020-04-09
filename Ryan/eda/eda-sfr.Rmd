@@ -1,0 +1,657 @@
+---
+title: "Exploratory Data Analysis"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load packages
+```{r include=FALSE}
+library(tidyverse)
+library(magrittr)
+library(kableExtra)
+library(caret)
+library(rstudioapi)
+require(cowplot)
+```
+
+## Load data and clean
+1) Drop observations with ProudGround as the owner (unreliable sale prices).
+2) Define an "arms-length transaction" in terms of the ratio between the assessed land value and the sale price multiplied by 100. 
+
+  Since sale price is generally greater than the land value (because improvements usually add value to the land), I remove observations in which this ratio is less than 0.2. Another common approach is to remove all properties in which the most recent assessed land value is greater than the sale price. I went with a slightly more conservative approach to preserve observations and to pad potential gaps in the time of land assessment to the time of transaction (in which inflation could creep into the land assessment). 
+
+- The median of this ratio is 220 and first quantile is 179.8, so we still generally see ratios greater than 100. 
+
+```{r warning=FALSE}
+df <- read.csv(here("thesis_data3-7.csv"))
+
+# Testing automatically setting the pathname)
+# current_path <- rstudioapi::getActiveDocumentContext()$path 
+# folders <- unlist(str_split(current_path, "/"))
+# print(folders)
+# i <- which("Thesis" == folders)
+# print(i)
+# short_fold <- folders[1:i]
+# print(short_fold)
+# new_path <- paste(short_fold, collapse = "/")
+# setwd(dirname(new_path))
+###########
+
+# TIDY
+df %<>%
+  rename(nbhd = NAME) %>%
+  mutate(n_fireplaces = ifelse(is.na(n_fireplaces), 0, n_fireplaces))
+
+
+# DROPS
+df %<>%
+  mutate(saledate = as.Date(saledate),
+         lnprice = log(SALEPRICE),
+         
+         # define flags
+         proud_flag =  grepl("PROUD", OWNER1) | 
+           grepl("PROUD", OWNER2) | grepl("PROUD", OWNER3),
+         trust_flag = grepl("TRUST", OWNER1) | 
+           grepl("TRUST", OWNER2) | grepl("TRUST", OWNER3), 
+         llc_flag = grepl("LLC", OWNER1) | 
+           grepl("LLC", OWNER2) | grepl("LLC", OWNER3),
+         top_1 =  SALEPRICE > quantile(SALEPRICE, .99),
+         price_diff = SALEPRICE - LANDVAL3, 
+         price_ratio = SALEPRICE/LANDVAL3 * 100,
+         vacant_dummy = PRPCD_DESC == "VACANT LAND") %>%
+  mutate(arms_length = price_ratio > 20)
+
+constraints <- c("conWetland", "conNatAm", 
+                   "conAirHgt", "conCovrly", "conPovrly", "conHeliprt",
+                   "conHist", "conHistLdm", "conInstit", 
+                 "conLSHA", "conLUST",
+                   "conNoise", "conPrvCom", "conSewer", "conSLIDO",
+                   "conSlp25", "conStorm", "conTranCap", "conTranSub",
+                   "conTranInt", "conTranSub", "conView", "conWater", 
+                 "conGW", "conPubOwn", "conFld100_ft", "conECSI")
+
+cts_vars <- c("dist_cityhall", "dist_ugb", 
+"f_baths", "totalsqft", "AREA", "avgheight", "garage_sqft","bsmt_sqft",
+"pct_canopy_cov", "YEARBUILT", "CN_score", "attic_sqft", "BLDGSQFT", 
+"percent_vacant")
+
+# switch the NAs in the constraints to 0s
+to0 <- function(x){ifelse(is.na(x), 0, x)}
+
+trim <- df %>% 
+  filter(proud_flag == F, top_1 == F,
+           arms_length == T, vacant_dummy == F) %>%
+  mutate_at(vars(constraints), to0) %>%
+  mutate(YEARBUILT = as.numeric(YEARBUILT)) %>%
+  mutate(YEARBUILT = case_when(
+    YEARBUILT < 1000 ~ NA_real_,
+    YEARBUILT > 2019 ~ NA_real_,
+    TRUE ~ YEARBUILT))
+
+constraint_sums <- trim %>%
+  select(constraints) %>%
+  rowSums()
+
+trim %<>%
+  mutate(is_constrained = constraint_sums > 0)
+
+gar_sqft_sum <- trim %>%
+  select(matches("gar")) %>%
+  rowSums()
+
+# attic sqft
+attic_sqft_sum <- trim %>%
+  select(matches("attic")) %>%
+  rowSums()
+
+# basement sqft
+bsmt_sqft_sum <- trim %>%
+  select(matches("bsmt")) %>%
+  select(-c("BSMT.PARKING","BSMT.GAR")) %>%
+  rowSums()
+
+
+trim %<>%
+  mutate(garage_sqft = gar_sqft_sum,
+         garage_dum = garage_sqft > 0,
+         attic_sqft = attic_sqft_sum,
+         attic_dum = attic_sqft > 0,
+         bsmt_sqft = bsmt_sqft_sum,
+         bsmt_dum = bsmt_sqft > 0,
+         year_sold = format(saledate, "%Y"))
+
+
+```
+
+## SFR-specific drops 
+Might want to include the maybe_mfrs in the MFR analysis.
+
+```{r}
+# define separate data frames for mfr and sfr
+sfr.dat <- trim %>%
+  filter(prop_type == "Single-family")
+
+sfr.dat %<>%
+  mutate(empty_lot_flag = BLDGSQFT == 0, is.na(totalsqft),
+         maybe_mfr_flag = UNITS > 5 | f_baths > 10,
+        big_sqft_flag = BLDGSQFT > 10000,
+        big_bsmt_flag = bsmt_sqft > 9000)
+sfr.dat <- sfr.dat %>%
+  filter(empty_lot_flag == F,
+         maybe_mfr_flag == F)
+
+sfr.dat <- sfr.dat[-c(23428),]
+#sfr.dat <- sfr.dat[-c(23428, 9695, 21287, 7433, 9697, 6278),]
+
+```
+
+## Summary statistics
+
+```{r}
+# constraint counts
+c1table <- sfr.dat %>%
+  select(constraints, conPrvCom, conNatAm, conHeliprt) %>%
+  colSums() %>%
+  sort() %>%
+  kable(caption = "constraint counts") %>% 
+  kable_styling(full_width = F)
+
+# tables of cts_vars
+sfr.dat %>% 
+  select(cts_vars) %>%
+  summary() 
+
+stargazer::stargazer(sfr.dat %>% select(cts_vars),
+ title="Summary Statistics", 
+ type = "text", digits = 2, out = "table.txt")
+```
+
+**attic_sqft** skewed--median at 0, mean at 824. This variable includes the summed square footage of all attics, finished, unfinished etc. That's why our maximum large. since the distribution is skewed I use a dummy denoting whether an attic is present instead. 
+
+**bsmt_sqft** has the problem to a lesser extent, but was generated the same way. 
+
+**AREA** = taxlot area is slightly left skewed (comparing median to mean).
+
+---
+## Scatterplots: looking for linearity
+
+Let's see how the control variables stack up with respect to the dependent variable, log of sale price. 
+
+### SFR Relationships
+
+```{r, cache = T, warning = F}
+plotCts <- function(i, df, tit = ""){
+  ggplot(data = df, 
+                         aes(y = lnprice, 
+                             x = get(i))) +
+    geom_jitter(alpha = 0.4) +
+    geom_smooth() +
+    labs(title = tit,
+         y = "Log of Sale Price",
+         x = i) + 
+    theme_minimal() %>% list()
+}
+
+plot_list <- lapply(1:length(cts_vars), plotCts, df = sfr.dat)
+names(plot_list) <- cts_vars
+
+plot_list["bsmt_sqft"]
+plot_list["BLDGSQFT"]
+plot_list["percent_vacant"] 
+cowplot::plot_grid(plotlist = plot_list[1:4], ncol = 2, nrow = 2)
+cowplot::plot_grid(plotlist = plot_list[5:8], ncol = 2, nrow = 2)
+cowplot::plot_grid(plotlist = plot_list[9:12], ncol = 2, nrow = 2)
+```
+From the above plots, we can see that the square footage and distance to **city hall** appear to be quadratic in log of sale price. Though **full baths** is discrete, we can pick up on a pretty linear trend. 
+
+**area** = total taxlot area. Seems highly variable. Should investigate the role of outliers here. I suspect it will also be quadratic and increasing in $y$. It's pretty useless leaving the outliers in.
+
+**yearbuilt** seems to be parabolic, which sort of makes sense. We could hypothesize that older homes that are still around (have been sold in the last five years) have been better upkept and brand-new homes may also be more expensive. How do we capture/specify this non-linear relationship?
+
+**dist_ugb** some heteroskedasticity here (when using a sample--it's hard to tell from the cloud of data points above), which kind of makes sense. There are fewer homes located on the periphery of the UGB. I can imagine these would be more likely to be either run-down or come with a large amount of property. That is, the characteristics of the property may be less regulated and uniform on the outskirts of the city. 
+
+**percent_vacant** some heteroskedasticity here also, decreasing variance as percent vacant increases
+
+---
+# Identifying Outliers - SFR
+
+```{r}
+sfr.dat %>%
+  filter(BLDGSQFT > 6000|
+           avgheight > 60|
+           AREA > 3e+05|
+           f_baths > 10) %>%
+  select(X, SITEADDR, STATE_ID, SALEPRICE, SITEADDR, sale_zone, UNITS,  f_baths, h_baths, attic_sqft, totalsqft, BLDGSQFT, AREA)
+
+sfr.dat %>% filter(UNITS > 0) %>%
+    select(X, SITEADDR, STATE_ID, SALEPRICE, SITEADDR, sale_zone, UNITS,  
+           f_baths, h_baths, attic_sqft, totalsqft, BLDGSQFT, AREA)
+
+# look for vacant lots (even though we've pruned them using prop_desc, they might still be around)
+sfr.dat %>%
+  filter(BLDGSQFT == 0) %>%
+  select(BLDGSQFT, totalsqft, sale_zone, UNITS, f_baths, STATE_ID, SITEADDR, AREA, SALEPRICE, LANDVAL3) # there are 145 props with 0 BLDGSQFT
+
+
+```
+
+Building Square footage outliers: 
+- 7447 SE HOLGATE BLVD: church, neither measure (totalsqft or BLDGSQFT) appear to be correct; I think we need to remove this
+
+- 1891 WI/ SW HAWTHORNE TER: part of a larger lot, but the state IDs are indeed different, the parent from which the saleprice comes from is 1S1E04CC  1600.
+
+- NE SIMPSON ST: flag-shaped lot, belongs to the IRA, there was another transaction two days prior that looks normal. Can be removed
+
+- 3603 E/ SE 143RD AVE: again, no building here, must be part of a different sale and split the taxlot for some reason. 
+
+- 15400 SE POWELL BLVD: appears to be commercial. Can be removed.
+
+- 2470 NE HIGHLAND ST: looks like a proper home but with a ton of missingness, weird
+
+- NE SKIDMORE ST: this is literally just a garage... the home adjacent to it hasn't sold yet. 
+
+- 5905 WI/ NE HALSEY ST: parking lot
+
+I'm just gonna flag properties with missing totalsqft (from building footprints and those with 0 for BLDGSQFT).
+
+
+HUGE totalsqft: 1238 SE RHINE ST is fine--but the totalsqft number is wrong. However BLDGSQFT and AREA are the same as portlandmaps.com
+    - it's a split taxlot property
+    
+HUGE AREA: 
+- SW COR/ 5TH ST & NW 108TH AVE; this is on the outskirst of Forest Park and owned by Portland Parks and Rec, I think we can remove it from the sample (rownum = 11724); zoned OS and Residential
+
+- 11550 SW AVENTINE CIRCUS: big boy mansion, doesn't look like these are entry errors--the property is just located on a 1.14 acre lot, but we might want to remove it anyway.
+
+HUGE f_baths: These are fourplexes/duplexes that still fall into the camp of SFR. They should probably be kept, but possibly transferred over to MFR.
+
+- 2136 NE WEIDLER ST: coded as "9-20 UNIT MULTI-FAMILY" in PortlandMaps
+
+- 1535 SE 29TH AVE: same as above, 9-20 UNIT MULTI-FAMILY 
+
+- 3562 SE HARRISON ST: 9-20 UNIT MULTI-FAMILY
+
+- 2208 NE MULTNOMAH ST: 9-20 UNIT MULTI-FAMILY
+
+- 4408-4418 SE 27TH AVE: FOUR-PLEX 
+
+- 4020-4030 SE PARDEE ST: FOUR-PLEX 
+
+---
+# REGRESSIONS
+
+## Establishing a baseline
+Without neighborhood, school catchment area fixed effects, or constraints. 
+$R^2_{adj} = 0.658$
+
+```{r}
+# 1. What units are avgheight in?
+# 2. Do we have reliable number of stories?
+# 3. Recall that isVacant is the old guy
+
+base_controls <- "lnprice ~ h_baths + f_baths + n_fireplaces + bsmt_dum + dist_cityhall + dist_ugb + YEARBUILT + CN_score + pct_canopy_cov + AREA + BLDGSQFT + garage_sqft + attic_dum + avgheight + year_sold + percent_vacant"
+
+# note: this removes constraints with tiny no of properties
+constraints.no.alias <- setdiff(constraints, c("conNatAm", 
+                                               "conHeliprt", "conPrvCom",
+                                               "conInstit", "conView"))
+constraints.sum <- paste(constraints.no.alias, collapse = " + ")
+
+constraints_only_formula <- as.formula(paste0("lnprice ~ ",
+                                              constraints.sum))
+
+# linear model, only controls 
+# outliers: 7433, 8235, 
+m1 <- lm(as.formula(base_controls), data = sfr.dat)
+summary(m1)
+plot(m1)
+```
+
+**Cook's distance** tells us that there are no highly influential points, those outside the range of the dotted red lines. This may be because there is so much data within Cook's distance. So, I will remove observations 7538 and 8345.
+
+**QQ plot** This tells us that our data has more extreme values than would be predicted by a normal distribution.  We can see this in noting that there's a large chunk within the 2nd theoretical quantile that is systematically over-predicted, this is not as bad at top quantiles, but still a slight issue.
+
+**Possible solution:** check if the conservative price ratio technique has an effect on this (and prune based on whether property value was greater than the assessed land value). 
+
+Note that the adjusted R2 with just these few variables already explains quite a bit of the variation--0.654. Let's see if we can improve upon this base model by adding nonlinear terms to account for the patterns observed in the above scatterplots.
+
+## Base + quadratic terms (no constraints)
+$R^2_{adj} = 0.6587$
+
+```{r}
+quad <- paste0(base_controls, " + I(BLDGSQFT^2) + I(AREA^2)")
+
+m2 <- lm(as.formula(quad), data = sfr.dat)
+summary(m2)
+plot(m2) # There are a ton of outliers here (not additional ones)!
+```
+
+The adj R2 inreases only slightly by adding the quadratic terms. They show up as significant and negative. Then again, we have 20,000 observations so might run into the problem that everything is significant. 
+
+## Comparing different FE (no constraints)
+Bias-var in action. The most explanatory model is the neighborhood due to the fineness of the effect.
+
+```{R}
+# this manually removes a dummy category so that we don't get singularities
+
+m_controls_nbhd <- sfr.dat %>%
+  lm(formula = as.formula(paste0(base_controls, "+ sale_zone + nbhd + I(BLDGSQFT^2) + I(AREA^2)"))) #%>%   #summary()  # adj R2 = .7253
+
+m_controls_high <- sfr.dat %>%
+  lm(formula = as.formula(paste0(base_controls, 
+                                 " + sale_zone + HIGH_SCH")))# %>%
+ # summary() # adj R2 = .6968
+
+m_controls_elem <- sfr.dat %>%
+  lm(formula = as.formula(paste0(base_controls, 
+                                 "+ sale_zone + ELEM_SCH"))) #%>%
+  #summary()  # adj R2 = .716
+
+m_controls_mid <- sfr.dat %>%
+  lm(formula = as.formula(paste0(base_controls, 
+                                 "+ sale_zone + MIDDLE_SCH"))) #%>%
+  #summary() # adj R2 = .703
+```
+
+
+## Constraints!! + base controls + FE
+
+```{r}
+# fe
+FEmodel <- function(dat){
+  dat %>%
+  lm(formula = as.formula(paste0(base_controls, paste0("+ sale_zone + nbhd + I(BLDGSQFT^2) + I(AREA^2) +", constraints.sum))))
+}
+
+# no fe 
+# define formula
+quad_c <- paste0(base_controls, paste0(" + I(BLDGSQFT^2) + I(AREA^2) + ",
+                                       constraints.sum))
+# fit model
+no_fe_c <- lm(as.formula(quad_c), data = sfr.dat)
+summary(no_fe_c)
+plot(no_fe_c)
+```
+
+### Box-cox
+Note that our R2 increases to 0.74 and the errors appear to be normally distributed under this transformation. The best lambda was ~0.30. Seems like a bit better model, but the interpretation of the coefficients is a little fickle. Let the coefficient on floodplain be denoted $\beta$. Then box cox says that location within a floodplain increases the transformed $Y$ by $\beta$. But box cox here induces normality of our errors and makes the assumptions of OLS estimation (normality of errors) more tenable. 
+
+How to interpret: the Box-Cox family of power transformations can be written, for all $\lambda \neq 0$:
+
+$$
+Y = \frac{X^{\lambda} - 1}{\lambda}
+$$
+
+
+```{r}
+base_controls_bc <- paste0("h_baths + f_baths + n_fireplaces + bsmt_dum + dist_cityhall + dist_ugb + YEARBUILT + CN_score + pct_canopy_cov + AREA + BLDGSQFT + garage_sqft + attic_dum + avgheight + year_sold + percent_vacant + sale_zone + nbhd + I(BLDGSQFT^2) + I(AREA^2) + ", constraints.sum)
+
+bestlam <- 1
+
+m_bc <- sfr.dat %>%
+  lm(formula = as.formula(paste0("I(SALEPRICE^(bestlam)) ~ ", base_controls_bc)))
+                
+# we're looking for the lambda that maximizes the joint log likelihood of our data      
+bc_obj <- MASS::boxcox(m_bc, lambda = seq(-2, 2, by = .05))
+i <- which.max(bc_obj$y)
+bestlam <- bc_obj$x[i]
+
+m_bc <- sfr.dat %>%
+  lm(formula = as.formula(paste0("I(SALEPRICE^(bestlam)) ~ ", base_controls_bc)))
+
+s_bc <- summary(m_bc)
+plot(m_bc)
+
+```
+
+---
+# ROBUSTNESS
+
+How do our constraints change between the base + constraints and that with fixed effects?
+
+```{r}
+s_no_fe <- summary(no_fe_c)
+est_no_fe <- s_no_fe$coefficients[,1]
+
+s_fe <- summary(FEmodel(sfr.dat)) # r2 increases by .04
+est_fe <- s_fe$coefficients[,1]
+
+# define comparison table function for comparing magnitudes/pct changes in estimates
+makeCompTable <- function(vars, fe, nofe){
+  s1 <- summary(fe)
+  s2 <- summary(nofe)
+  data.frame(variable = vars,
+           FE_estimate = s1$coefficients[,1][vars],
+          # FE_se = s1$coefficients[,2][vars],
+           FE_p = s1$coefficients[,4][vars],
+           No_FE_estimate = s2$coefficients[,1][vars],
+          # No_FE_se = s2$coefficients[,2][vars],
+           No_FE_p = s2$coefficients[,4][vars]) %>%
+  mutate(pct_change = 100 * (FE_estimate - No_FE_estimate) / No_FE_estimate,
+         sig = case_when(
+           No_FE_p < 0.05 & FE_p < 0.05 ~ "***",
+           FE_p <= 0.05 & No_FE_p > 0.05 ~ "* FE",
+           FE_p > 0.05 & No_FE_p <= 0.05 ~ "* no FE",
+           TRUE ~ ""))
+  }
+#          )) %>%
+#   kable("latex", booktabs = T) %>% 
+#   kable_styling(full_width = T)
+# }
+
+```
+
+## Defining arms-length
+```{r}
+sfr.dat %<>% filter(LANDVAL3 < SALEPRICE)
+sfr.dat %>% count()
+
+# reestimate same models
+s_rms_length <- FEmodel(sfr.dat)
+summary(FEmodel(sfr.dat)) # fe; lol this goes to .8 r2 and the qq stuff looks sm better
+no_fe_c <- lm(as.formula(quad_c), data = sfr.dat)
+summary(no_fe_c)
+
+plot(no_fe_c)
+plot(s_rms_length)
+```
+
+Can see that generally the constraints that were significant in both cases changed less than those that were not. But still these look like dramatic changes in the magnitude of the estimates. 
+
+At least the controls don't vary much and those that do are multicollinear with the neighborhood dummies. 
+
+
+## Winning model for now...
+Note that the highest Cook's distance is 0.149, I don't think there's too much to worry about here, even though the leverage/distance plots are a little funky. 
+
+```{r}
+m <- FEmodel(sfr.dat)
+length(m$residuals) # how to connect residuals back in order to map??
+sm <- summary(m)
+sm
+fe.estimates <- sm$coefficients[,1]
+#plot(m)
+#cooks.distance(m) %>% sort(decreasing = T)
+
+# detecting leverage using fitted values vs ys
+yhat <- m$fitted.values
+dim(sfr.dat)
+
+n <- colnames(sfr.dat)[colnames(sfr.dat) %in% colnames(m$model)]
+
+# get the ys 
+ys <- sfr.dat %>%
+  select(n) %>%
+  na.omit() %>%
+  pull(lnprice)
+```
+
+
+```{R}
+pooled.ols <- plm(formula=y~x, data=petersen, model="pooling", index=c("firmid", "year")) 
+```
+
+
+
+
+---
+# VIFs
+
+Let's look for multicollinearity in the above models.
+
+```{r}
+# define vif plotting function
+vifTable <- function(model, head = T){
+  car::vif(model, singular.ok = T) %>% as.data.frame() %>%
+  mutate(var = rownames(.)) %>%
+  arrange(desc(GVIF)) %>%
+  select(var, everything()) #%>% #ifelse(head, head(.), .)  %>%
+}
+```
+
+## Constraints + base controls VIF
+From the table below, looks like we don't need to worry about multicollinearity among the constraints themselves as each is below 3. 
+
+Note that I needed to remove the constraints: **natAm**, **heliprt**, **prvCom**, **instit** due to aliased coefficients. 
+
+```{r}
+# getting error that there are aliased coefficients in the model
+# remove constraints: natAm, heliport, prvcom
+lm(as.formula(paste0("lnprice ~ h_baths + f_baths + n_fireplaces + \n       dist_cityhall + dist_ugb + YEARBUILT + CN_score +\n       pct_canopy_cov + AREA + BLDGSQFT + garage_sqft +  attic_dum + avgheight + year_sold +", constraints.sum)), sfr.dat) %>%
+    vifTable() %>% 
+    kable()# alone, constraints explain only .1449 of the variation 
+```
+
+When sale_zone is included, the largest VIF of sale_zone = 6.59 and CN_score = 3.59, which indicates some but not an absurd amount of collinearity among the two variables. I will consider removing variables for which multicollinearity is above 5. 
+
+## Fixed effects + base controls VIF
+Which mode of fixed effects on their own is best in terms of R2?
+
+```{R}
+vifTable(m_controls_nbhd) %>% head() %>% kable()
+vifTable(m_controls_elem) %>% head() %>% kable()
+vifTable(m_controls_mid) %>% head() %>% kable()
+vifTable(m_controls_high) %>% head() %>% kable()
+```
+
+As we can see, both the VIF and the R2 increase in the granularity/fineness of the fixed effect chosen. There are more elementary schools than high schools, thus each school catchment area can be uniquely identified by an elem-mid-high combo (which is really just unique by the elmentary school). 
+
+What does this imply about our modeling approach? Do I need to choose exactly one set of fixed effects even though they each capture slightly different things?
+
+Should check if the school catchment areas and neighborhood fixed effects are the same. We have *perfect multicollinearity* when we include both. Also note that the VIF skyrockets for the distance, CN score variables, thereby increasing variance of the model.  
+
+---
+# Model Diagnostics
+
+## Assessing model validity of nbhd fixed effect (no constraints)
+
+```{r}
+plot(m_controls_nbhd)
+s1 <- summary(m_controls_nbhd)
+s1$adj.r.squared
+mean(s1$residuals) # errors are centered at 0, yay!
+```
+
+## Assessing FE model validity with constraints
+
+Questions -- 
+1) All effects are small and positive here, so does including fixed effects reduce our ability to identify the full impact of the constraints? What is more important, to have a model that explains more variation in $y$ or to understand the "impact" of the constraints. Basically when including neighborhoods, constraints no longer matter. The scale-location for both look to be similar. Let's try a Durwin test for autocorrelation next, because I'm assuming that's the downside of the leaving spatial dummies out. 
+
+## Robustness of constraints with and without FE
+
+```{r}
+s2 <- summary(m_controls_nbhd_c)
+s2
+s2$adj.r.squared
+plot(m_controls_nbhd_c)
+# i want to remove 23428
+
+sfr.dat <- sfr.dat[-23428,]
+s_fe <- summary(FEmodel(sfr.dat))
+s2 # removed obs 23428
+plot(FEmodel(sfr.dat))
+
+
+```
+
+## Assessing model validity (no FE) with constraints
+The $R^2_{adj} = 0.6643$ 
+
+```{R}
+plot(no_fe_c)
+sfr.dat <- sfr.dat[-c(23428),]
+plot(FEmodel(sfr.dat[-23428,]))
+```
+Residual v fitted looks fine aside from QQ and Cook's distance. Let's remove observations 23775, 8345, 13676 (the final 2 may need not be removed).
+
+## Removing outliers
+
+```{r}
+sfr.dat <- sfr.dat[-c(23775, 8345, 13676),]
+
+m3 <- lm(as.formula(quad_c), data = sfr.dat)
+summary(m3)
+plot(m3)
+
+# removing more outliers close to cook's
+sfr.dat <- sfr.dat[-c(7538),]
+m3 <- lm(as.formula(quad_c), data = sfr.dat)
+summary(m3)
+plot(m3)
+```
+
+From these plots, we can see that there is an observation with leverage 1, potentially meaning a group with only one member (I think this is the conView variable). And the named points don't appear to be funky--they completely lack a constraint too. 
+
+### Durbin-Watson tests
+```{r}
+lmtest::dwtest(m3)
+lmtest::dwtest(FEmodel(sfr.dat))
+```
+**No fixed effects** p = 2.2e-16
+**Fixed effects** p = 0.012
+
+From the map, looks like the errors are not really spatially correlated with one another, however spatial lag is a more concerning problem. Or is it a scale issue?
+
+Even adding the finest scale neighborhood controls, looks like we cannot reject the null that there is some autocorrelation. But it's neat to see that adding in the fixed effects appear to improve the spatial autocorrelation. This means that our p-values can't really be trusted, because independent errors assumption has been violated. 
+
+### Visualizing the correlation
+
+---
+# Exploring interactions
+
+
+## Bias-variance: spatial fixed effects
+Using test/training subsets of the full data frame.
+
+## Missingness
+```{r}
+# # find which columns are mostly present
+# nas <- is.na(enet_df) %>% as.data.frame()
+# nacols <- nas %>% colSums()
+# naimps <- trim %>% filter(is.na(`DECK`)) %>%
+#   select(prop_type, SALEPRICE, sale_zone, STATE_ID, SITEADDR, everything())
+```
+
+## Using E-net on all variables 
+We have missing data, so e-net can't be run.
+But could make a smaller df of just the improvement sqftage.
+
+```{r}
+# enet_df <- trim %>%
+#   select(-matches("val|date|grade|arms_length|shared|source|SITEADDR|owner|X1|state_id|rno|city|tax|legal_desc|AUDIT_NBRH|bldgtype|BEDROOMS|minheight|maxheight|Category|Zone Description|FRONTAGE|COMMPLAN|volume|surfelev"))
+# 
+# set.seed(42)
+# cv_5 <- trainControl(method = "cv", number = 5)
+# 
+# hit_elnet <- train(I(log(SALEPRICE)) ~ ., data = enet_df,
+#   method = "glmnet",
+#   trControl = cv_5, 
+#   na.action = na.omit)
+```
+
+
+
+
