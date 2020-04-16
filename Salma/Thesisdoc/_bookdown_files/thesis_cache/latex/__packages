@@ -1,0 +1,15 @@
+base
+methods
+datasets
+utils
+grDevices
+graphics
+stats
+usethis
+devtools
+remotes
+dplyr
+ggplot2
+bookdown
+knitr
+thesisdown

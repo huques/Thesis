@@ -160,10 +160,10 @@ for (i in seq_along(nm)) {
 
 # formula: only dummies, no percent except for percent canopy cover
 mu_lin = formula(paste0("SALEPRICE ~ 
-                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + yearbuilt + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_dum + attic_dum + bsmt_dum + year_sold + maxheight + FLOORS + UNITS + sale_zone + MapLabel + HIGH_SCH + ", con_names))
+                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + yearbuilt + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_dum + attic_dum + bsmt_dum + year_sold + maxheight + FLOORS + UNITS + sale_zone + MapLabel + ", con_names))
 
 # reg
-mu_lin_mod <- lm(mu_lin, dat1)
+mu_lin_mod <- lm(mu_lin, dat2)
 summary(mu_lin_mod)
 
 #plot(mu_lin_mod)
@@ -172,18 +172,18 @@ summary(mu_lin_mod)
 
 # BOX-COX (LINEAR) REGRESSION--------------------------------------------
 
-bc = boxcox(mu_mod_linear, lamba = seq(-3, 3, 1))
+bc = boxcox(mu_lin_mod, lamba = seq(-3, 3, 1))
 best_lam = bc$x[which(bc$y == max(bc$y))]
-dat1 %<>% 
+dat2 %<>% 
   mutate(SALEPRICEbc = SALEPRICE^best_lam)
 
 # pre-analysis formula
 mu_bc = formula(paste0("SALEPRICEbc ~ 
-                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + yearbuilt + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_dum + attic_dum + bsmt_dum + year_sold + MapLabel + HIGH_SCH + ", con_names))
+                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + yearbuilt + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_dum + attic_dum + bsmt_dum + year_sold + MapLabel + ", con_names))
 
 # regression
-mu_mod_bc <- lm(mu_bc, dat1)
-summary(mu_mod_bc)
+mu_bc_mod <- lm(mu_bc, dat2)
+summary(mu_bc_mod)
 
 #plot(mu_mod_bc)
 
@@ -191,19 +191,26 @@ summary(mu_mod_bc)
 
 # SEMI-LOG REGRESSION-------------------------------------------
 
-dat1 %<>% 
+dat2 %<>% 
   mutate(SALEPRICElog = log(SALEPRICE))
 
 #pre-analysis formula
 mu_log = formula(paste0("SALEPRICElog ~ 
-                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + yearbuilt + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_dum + attic_dum + bsmt_dum + year_sold + MapLabel + HIGH_SCH + ", con_names))
+                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + yearbuilt + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_dum + attic_dum + bsmt_dum + year_sold + MapLabel + ", con_names))
 
 # regression
-mu_mod_log <- lm(mu_log, dat1)
-summary(mu_mod_log)
+mu_log_mod <- lm(mu_log, dat2)
+summary(mu_log_mod)
 
 #plot(mu_mod_log)
 
 
 #--------------------------------------------------
-stargazer(mu_mod_linear, mu_mod_log, mu_mod_bc, type="html", out="models.htm")
+stargazer(mu_lin_mod, mu_log_mod, mu_bc_mod, type="html", out="modelsmu.htm")
+```
+
+
+```{r}
+MU %>% filter(h_baths > 7)
+```
+

@@ -1,0 +1,24 @@
+# Preliminary Content {-}
+
+## Acknowledgements {-}
+
+My heartfelt thanks to Ryan Kobler, the most brilliant shining beacon of all that is good and worthy in my life. I will never be able to thank you enough for the unfaltering friendship and support you’ve given me over the last two years. This thesis is just as much a product of your hard work as it is mine. \par
+
+Thank you to Noelwah Netusil, for bringing your support and experience to this project, as well as your enthusiasn with my job search. You’re the best advisor I could have gotten! Thank you to Jon Rork for giving me a little (metaphorical) shake when I’m overthinking. Thank you to Jeff Parker for the cinnamon buns and corny jokes. And thanks to Kelly McConville for being the best professor I’ve had in my entire life. Working with you on forestry data gave me a <!-- gave me a what-->. \par
+
+Thank you to the folks at BPS, who did a whole lot of grunt work to make this work possible. In particular, thanks to Al Burns for entrusting us with this monster task, and to Nick Kobel for his earnest support and killer cake recipe. This definitely would not have been possible without you. \par
+
+All my love and thanks to Mama and Baba for talking to me on the phone every single day for the last four years. I have said so many embarrassing things and you have made fun of me every single time. Your encouragement makes me <!-- emotional-->. \par
+
+And lastly, thanks to the econ lunch crew: Will, Shulav, Annie, Jacob G, Claire, and Zeki, who always remind me that I made the right choice not doing math-econ; <!--to Gerry, for emotional support-->, to Mary Brady, the love of my life and my eternal coffeeshop study buddy; and to Dylan, <!--for enchiladas-->. I’m happy we’re all still friends four years later. 
+
+## Preface {-}
+
+This is an example of a thesis setup to use the reed thesis document class
+(for LaTeX) and the R bookdown package, in general.
+
+## Dedication {-}
+
+You can have a dedication here if you wish. 
+
+`r if(!knitr:::is_latex_output()) '## Abstract {-}'`

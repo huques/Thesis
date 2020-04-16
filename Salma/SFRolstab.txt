@@ -1,0 +1,291 @@
+term,key,1,2,3
+(Intercept),estimate,469868.49,13.04,729.66
+(Intercept),std.error,22026.19,0.06,17.41
+ADUdummy,estimate,-41573.72,-0.09,-32.34
+ADUdummy,std.error,5708.75,0.01,4.51
+age_sold,estimate,438.47,0,0.28
+age_sold,std.error,36.07,0,0.03
+attic_dumTRUE,estimate,-3938.27,0.01,0.48
+attic_dumTRUE,std.error,1764.09,0,1.39
+bsmt_dumTRUE,estimate,-3211.71,0.03,3.41
+bsmt_dumTRUE,std.error,1851.71,0,1.46
+CN_score,estimate,-174.98,0,-0.14
+CN_score,std.error,91.54,0,0.07
+conAirHgt,estimate,14314.9,0.03,10.8
+conAirHgt,std.error,3665.2,0.01,2.9
+conCovrly,estimate,-1697,0.01,0.37
+conCovrly,std.error,4355.74,0.01,3.44
+conECSI,estimate,100584.9,0.24,82.67
+conECSI,std.error,70371.72,0.18,55.63
+conFld100,estimate,-11336.82,-0.01,-6.07
+conFld100,std.error,10805.47,0.03,8.54
+conGW,estimate,29515.92,0.12,31.95
+conGW,std.error,40269.5,0.1,31.83
+conHist,estimate,37612.66,0.06,25.21
+conHist,std.error,5794.23,0.01,4.58
+conHistLdm,estimate,13773.33,-0.04,-2.3
+conHistLdm,std.error,27903.09,0.07,22.06
+conLSHA,estimate,9679.72,0.03,9.15
+conLSHA,std.error,3768.55,0.01,2.98
+conLUST,estimate,-20513.61,0.02,-3.45
+conLUST,std.error,71386.93,0.18,56.43
+conNoise,estimate,-3702.29,0.01,-0.56
+conNoise,std.error,8700.72,0.02,6.88
+conPovrly,estimate,-25407.82,-0.03,-14.37
+conPovrly,std.error,6094.93,0.02,4.82
+conPrvCom,estimate,340010.03,0.35,186.04
+conPrvCom,std.error,100286.51,0.25,79.28
+conPubOwn,estimate,9714.7,-0.07,-5.6
+conPubOwn,std.error,27623.39,0.07,21.84
+conSewer,estimate,8782.49,0.02,8.55
+conSewer,std.error,12512.73,0.03,9.89
+conSLIDO,estimate,-22101.51,-0.03,-13.85
+conSLIDO,std.error,5777.51,0.01,4.57
+conSlp25,estimate,10931.09,0.01,5.62
+conSlp25,std.error,3936.04,0.01,3.11
+conStorm,estimate,-2895.27,0,-0.96
+conStorm,std.error,2966.4,0.01,2.34
+conTranCap,estimate,-7242.98,-0.01,-5.42
+conTranCap,std.error,2993.37,0.01,2.37
+conTranInt,estimate,-6543.1,-0.02,-5.87
+conTranInt,std.error,3175.6,0.01,2.51
+conTranSub,estimate,-9795.13,-0.02,-7.96
+conTranSub,std.error,1882.24,0,1.49
+conWater,estimate,-7096.53,-0.03,-7.73
+conWater,std.error,3661.2,0.01,2.89
+conWetland,estimate,-59448.78,-0.06,-35.11
+conWetland,std.error,23659.97,0.06,18.7
+deck_dumTRUE,estimate,5627.18,0.02,6.04
+deck_dumTRUE,std.error,1468.6,0,1.16
+dist_cityhall,estimate,-5.37,0,0
+dist_cityhall,std.error,0.36,0,0
+dist_ugb,estimate,-1.32,0,0
+dist_ugb,std.error,0.44,0,0
+f_baths,estimate,55965.21,0.12,42.37
+f_baths,std.error,1213.29,0,0.96
+garage_dumTRUE,estimate,14022.46,0.04,13.05
+garage_dumTRUE,std.error,1876.65,0,1.48
+h_baths,estimate,41858.09,0.09,31.66
+h_baths,std.error,1568.14,0,1.24
+HIGH_SCHCLEVELAND HS,estimate,-30830.92,-0.13,-34.42
+HIGH_SCHCLEVELAND HS,std.error,12692.32,0.03,10.03
+HIGH_SCHDAVID DOUGLAS HS,estimate,-37102.56,-0.11,-34.99
+HIGH_SCHDAVID DOUGLAS HS,std.error,8497.23,0.02,6.72
+HIGH_SCHFRANKLIN HS,estimate,-34483.41,-0.13,-36.23
+HIGH_SCHFRANKLIN HS,std.error,11700.4,0.03,9.25
+HIGH_SCHGRANT HS,estimate,-950.23,-0.09,-15.7
+HIGH_SCHGRANT HS,std.error,13945.12,0.04,11.02
+HIGH_SCHGRANT-JEFF,estimate,-50053.06,-0.2,-54.18
+HIGH_SCHGRANT-JEFF,std.error,18391.27,0.05,14.54
+HIGH_SCHLINCOLN HS,estimate,59702.5,0.07,34.82
+HIGH_SCHLINCOLN HS,std.error,16573.91,0.04,13.1
+HIGH_SCHMADISON HS,estimate,-75903.75,-0.22,-69.47
+HIGH_SCHMADISON HS,std.error,12572.98,0.03,9.94
+HIGH_SCHMADISON-JEFF,estimate,-80591.64,-0.21,-68.71
+HIGH_SCHMADISON-JEFF,std.error,15241.17,0.04,12.05
+HIGH_SCHPARKROSE HS,estimate,-22720.43,-0.08,-23.18
+HIGH_SCHPARKROSE HS,std.error,12561.39,0.03,9.93
+HIGH_SCHREYNOLDS HS,estimate,-10291.16,-0.05,-13.27
+HIGH_SCHREYNOLDS HS,std.error,12513.97,0.03,9.89
+HIGH_SCHRIVERDALE HS,estimate,453645.58,0.52,262.55
+HIGH_SCHRIVERDALE HS,std.error,70933.93,0.18,56.07
+HIGH_SCHROOS-JEFF,estimate,-99361.65,-0.29,-88.27
+HIGH_SCHROOS-JEFF,std.error,19747.61,0.05,15.61
+HIGH_SCHROOSEVELT CAMPUS,estimate,-94283.49,-0.29,-87.49
+HIGH_SCHROOSEVELT CAMPUS,std.error,22589.68,0.06,17.86
+HIGH_SCHSUNSET HS,estimate,78283.9,0.09,44.7
+HIGH_SCHSUNSET HS,std.error,32750.28,0.08,25.89
+MapLabelArbor Lodge,estimate,-44341.93,-0.03,-23.83
+MapLabelArbor Lodge,std.error,17949.31,0.05,14.19
+MapLabelArdenwald-Johnson Creek,estimate,-134675.32,-0.23,-94.68
+MapLabelArdenwald-Johnson Creek,std.error,21113.2,0.05,16.69
+MapLabelArgay Terrace,estimate,-184838.89,-0.41,-144.76
+MapLabelArgay Terrace,std.error,18638.08,0.05,14.73
+MapLabelArlington Heights,estimate,4230.65,-0.15,-26.62
+MapLabelArlington Heights,std.error,28275.24,0.07,22.35
+MapLabelArnold Creek,estimate,-107637.24,-0.27,-88.05
+MapLabelArnold Creek,std.error,17562.63,0.04,13.88
+MapLabelAshcreek,estimate,-149996.89,-0.33,-117.4
+MapLabelAshcreek,std.error,16918.45,0.04,13.37
+MapLabelBeaumont-Wilshire,estimate,-12349.14,-0.02,-8.58
+MapLabelBeaumont-Wilshire,std.error,9591.84,0.02,7.58
+MapLabelBoise,estimate,-50460.05,0.01,-17.87
+MapLabelBoise,std.error,21040.1,0.05,16.63
+MapLabelBrentwood-Darlington,estimate,-158012.84,-0.35,-124.17
+MapLabelBrentwood-Darlington,std.error,13733.8,0.03,10.86
+MapLabelBridlemile,estimate,-155543.26,-0.34,-119.8
+MapLabelBridlemile,std.error,23669.01,0.06,18.71
+MapLabelBrooklyn Action Corps,estimate,-140305.09,-0.22,-94.59
+MapLabelBrooklyn Action Corps,std.error,15066.43,0.04,11.91
+MapLabelBuckman Community Association,estimate,-48240.23,-0.03,-24.83
+MapLabelBuckman Community Association,std.error,16663.98,0.04,13.17
+MapLabelCathedral Park,estimate,-30930.19,0,-12.73
+MapLabelCathedral Park,std.error,22608.89,0.06,17.87
+MapLabelCentennial Community Association,estimate,-154510.55,-0.45,-139.94
+MapLabelCentennial Community Association,std.error,16993.78,0.04,13.43
+MapLabelCollins View,estimate,-147042.45,-0.32,-114.88
+MapLabelCollins View,std.error,17971.78,0.05,14.21
+MapLabelConcordia,estimate,-44097.47,-0.07,-28.85
+MapLabelConcordia,std.error,11937.13,0.03,9.44
+MapLabelCreston-Kenilworth,estimate,-118173.92,-0.19,-81.21
+MapLabelCreston-Kenilworth,std.error,13790.83,0.03,10.9
+MapLabelCrestwood,estimate,-168531.43,-0.38,-132.54
+MapLabelCrestwood,std.error,17885.51,0.05,14.14
+MapLabelCully Association of Neighbors,estimate,-118012.46,-0.23,-87.52
+MapLabelCully Association of Neighbors,std.error,11117.53,0.03,8.79
+MapLabelEast Columbia,estimate,-178474.03,-0.46,-149.04
+MapLabelEast Columbia,std.error,22317.73,0.06,17.64
+MapLabelEastmoreland,estimate,69751.63,0.12,49.02
+MapLabelEastmoreland,std.error,14631.6,0.04,11.57
+MapLabelEliot,estimate,-129852.58,-0.11,-71.28
+MapLabelEliot,std.error,33879.61,0.09,26.78
+MapLabelFar Southwest,estimate,-122378.66,-0.26,-94.62
+MapLabelFar Southwest,std.error,18692.95,0.05,14.78
+MapLabelForest Park,estimate,-48475.07,-0.21,-54.85
+MapLabelForest Park,std.error,26302.32,0.07,20.79
+MapLabelFoster-Powell,estimate,-125657.71,-0.23,-90.7
+MapLabelFoster-Powell,std.error,13745.86,0.03,10.87
+MapLabelGlenfair,estimate,-178174.85,-0.43,-147.49
+MapLabelGlenfair,std.error,22307.25,0.06,17.63
+MapLabelGoose Hollow Foothills League,estimate,-68623.93,-0.28,-77.23
+MapLabelGoose Hollow Foothills League,std.error,32683.41,0.08,25.84
+MapLabelGrant Park,estimate,45479.19,0.09,32.68
+MapLabelGrant Park,std.error,11054.3,0.03,8.74
+MapLabelHayden Island Neighborhood Network,estimate,43721.65,0.12,40.91
+MapLabelHayden Island Neighborhood Network,std.error,32639.84,0.08,25.8
+MapLabelHayhurst,estimate,-157092.02,-0.34,-122.22
+MapLabelHayhurst,std.error,16957.33,0.04,13.4
+MapLabelHazelwood,estimate,-158739.82,-0.39,-130.57
+MapLabelHazelwood,std.error,14391.73,0.04,11.38
+MapLabelHealy Heights,estimate,28667.29,-0.14,-16.29
+MapLabelHealy Heights,std.error,39355.41,0.1,31.11
+MapLabelHillsdale,estimate,-130070.85,-0.31,-106.48
+MapLabelHillsdale,std.error,17087.19,0.04,13.51
+MapLabelHillside,estimate,-9831.82,-0.19,-39.25
+MapLabelHillside,std.error,26364.71,0.07,20.84
+MapLabelHollywood,estimate,30861.33,0.09,27.8
+MapLabelHollywood,std.error,23977.76,0.06,18.95
+MapLabelHomestead,estimate,-185879.06,-0.4,-143.27
+MapLabelHomestead,std.error,30655.12,0.08,24.23
+MapLabelHosford-Abernethy Neighborhood District Assn.,estimate,-31576.9,-0.03,-17.95
+MapLabelHosford-Abernethy Neighborhood District Assn.,std.error,14078.36,0.04,11.13
+MapLabelHumboldt,estimate,-49983.45,-0.04,-26.23
+MapLabelHumboldt,std.error,16986.21,0.04,13.43
+MapLabelIrvington Community Association,estimate,27840.84,0.02,12.83
+MapLabelIrvington Community Association,std.error,11467.33,0.03,9.06
+MapLabelKenton,estimate,-74648.74,-0.1,-48.45
+MapLabelKenton,std.error,20119.55,0.05,15.9
+MapLabelKerns,estimate,-34580.59,-0.01,-14.89
+MapLabelKerns,std.error,19539.66,0.05,15.45
+MapLabelKing,estimate,-92661.98,-0.12,-57.71
+MapLabelKing,std.error,12799.11,0.03,10.12
+MapLabelLaurelhurst,estimate,40135.07,0.08,30.08
+MapLabelLaurelhurst,std.error,9800.51,0.02,7.75
+MapLabelLents,estimate,-159949.41,-0.39,-132.26
+MapLabelLents,std.error,13455.26,0.03,10.64
+MapLabelLinnton,estimate,-181498.54,-0.36,-133.91
+MapLabelLinnton,std.error,28477.67,0.07,22.51
+MapLabelMadison South,estimate,-121969.97,-0.27,-96.1
+MapLabelMadison South,std.error,11912.21,0.03,9.42
+MapLabelMaplewood,estimate,-134520.17,-0.29,-103.54
+MapLabelMaplewood,std.error,17714.07,0.04,14
+MapLabelMarkham,estimate,-187827.29,-0.41,-147.06
+MapLabelMarkham,std.error,17497.98,0.04,13.83
+MapLabelMarshall Park,estimate,-128086.35,-0.28,-100.26
+MapLabelMarshall Park,std.error,18986.33,0.05,15.01
+MapLabelMC Unclaimed #13,estimate,-129548.45,-0.34,-112.51
+MapLabelMC Unclaimed #13,std.error,92442.76,0.23,73.07
+MapLabelMill Park,estimate,-161842.3,-0.41,-135.56
+MapLabelMill Park,std.error,15029.24,0.04,11.88
+MapLabelMontavilla,estimate,-94599.55,-0.19,-70.11
+MapLabelMontavilla,std.error,11387.94,0.03,9
+MapLabelMt. Scott-Arleta,estimate,-117954.06,-0.21,-84.88
+MapLabelMt. Scott-Arleta,std.error,13879.6,0.04,10.97
+MapLabelMt. Tabor,estimate,-820.12,0.03,5.09
+MapLabelMt. Tabor,std.error,12319.61,0.03,9.74
+MapLabelMultnomah,estimate,-137520.79,-0.3,-107.53
+MapLabelMultnomah,std.error,16923.14,0.04,13.38
+MapLabelNorth Tabor,estimate,-85934.5,-0.14,-58.23
+MapLabelNorth Tabor,std.error,12899.55,0.03,10.2
+MapLabelNorthwest District Association,estimate,92282.69,-0.03,29.29
+MapLabelNorthwest District Association,std.error,27453.03,0.07,21.7
+MapLabelNorthwest Heights,estimate,-9482.39,-0.14,-28.07
+MapLabelNorthwest Heights,std.error,24258.21,0.06,19.18
+MapLabelOverlook,estimate,-19581.96,0.02,-5.01
+MapLabelOverlook,std.error,18580.87,0.05,14.69
+MapLabelParkrose,estimate,-192529.86,-0.47,-160.27
+MapLabelParkrose,std.error,18774.19,0.05,14.84
+MapLabelParkrose Heights Association of Neighbors,estimate,-186835.26,-0.46,-154.85
+MapLabelParkrose Heights Association of Neighbors,std.error,17982.46,0.05,14.21
+MapLabelPiedmont,estimate,-57855.58,-0.06,-34.77
+MapLabelPiedmont,std.error,17713.24,0.04,14
+MapLabelPleasant Valley,estimate,-137724.54,-0.29,-105.47
+MapLabelPleasant Valley,std.error,16145.76,0.04,12.76
+MapLabelPortsmouth,estimate,-60643.98,-0.07,-37.26
+MapLabelPortsmouth,std.error,21042.4,0.05,16.63
+MapLabelPowellhurst-Gilbert,estimate,-153586.44,-0.41,-131.72
+MapLabelPowellhurst-Gilbert,std.error,15240.96,0.04,12.05
+MapLabelReed,estimate,-79308.24,-0.09,-47.1
+MapLabelReed,std.error,15832.47,0.04,12.52
+MapLabelRichmond,estimate,-32509.54,-0.01,-15.22
+MapLabelRichmond,std.error,12787.43,0.03,10.11
+MapLabelRose City Park,estimate,-49283.25,-0.04,-26.04
+MapLabelRose City Park,std.error,9202.75,0.02,7.27
+MapLabelRoseway,estimate,-78743.37,-0.13,-53.94
+MapLabelRoseway,std.error,11285.37,0.03,8.92
+MapLabelRussell,estimate,-172328.29,-0.4,-139.17
+MapLabelRussell,std.error,18470.43,0.05,14.6
+MapLabelSabin Community Association,estimate,-37540.36,-0.04,-22.02
+MapLabelSabin Community Association,std.error,9636.58,0.02,7.62
+MapLabelSellwood-Moreland Improvement League,estimate,-33871.89,-0.02,-16.46
+MapLabelSellwood-Moreland Improvement League,std.error,13555.03,0.03,10.72
+MapLabelSouth Burlingame,estimate,-156711.37,-0.35,-123.97
+MapLabelSouth Burlingame,std.error,18239.48,0.05,14.42
+MapLabelSouth Portland,estimate,-65265.08,-0.18,-57.29
+MapLabelSouth Portland,std.error,19511.08,0.05,15.42
+MapLabelSouth Tabor,estimate,-84861,-0.11,-53.64
+MapLabelSouth Tabor,std.error,13624.82,0.03,10.77
+MapLabelSouthwest Hills Residential League,estimate,-35672.09,-0.22,-53.62
+MapLabelSouthwest Hills Residential League,std.error,23586.29,0.06,18.64
+MapLabelSt. Johns,estimate,-55999.95,-0.09,-38.19
+MapLabelSt. Johns,std.error,21219.53,0.05,16.77
+MapLabelSullivan's Gulch,estimate,-105890.14,-0.13,-64.38
+MapLabelSullivan's Gulch,std.error,21620.06,0.05,17.09
+MapLabelSumner Association of Neighbors,estimate,-183589.77,-0.47,-154.94
+MapLabelSumner Association of Neighbors,std.error,19410.19,0.05,15.34
+MapLabelSunderland Association of Neighbors,estimate,-188351.17,-0.58,-174.39
+MapLabelSunderland Association of Neighbors,std.error,52620.87,0.13,41.6
+MapLabelSunnyside,estimate,-19523.91,0.03,-2.73
+MapLabelSunnyside,std.error,13684.79,0.03,10.82
+MapLabelSylvan-Highlands,estimate,-134464.93,-0.32,-108.97
+MapLabelSylvan-Highlands,std.error,26411.59,0.07,20.88
+MapLabelUniversity Park,estimate,-40619.03,-0.01,-18.82
+MapLabelUniversity Park,std.error,21354.92,0.05,16.88
+MapLabelVernon,estimate,-18229.74,0,-6.88
+MapLabelVernon,std.error,15308.87,0.04,12.1
+MapLabelWest Portland Park,estimate,-169783.71,-0.37,-133.54
+MapLabelWest Portland Park,std.error,17352.05,0.04,13.72
+MapLabelWilkes Community Group,estimate,-167012.07,-0.38,-133.61
+MapLabelWilkes Community Group,std.error,19630.58,0.05,15.52
+MapLabelWoodland Park,estimate,-185262.56,-0.48,-158.12
+MapLabelWoodland Park,std.error,26938.66,0.07,21.29
+MapLabelWoodlawn,estimate,-60021.4,-0.06,-35.99
+MapLabelWoodlawn,std.error,16255.71,0.04,12.85
+MapLabelWoodstock,estimate,-84338.33,-0.11,-53.26
+MapLabelWoodstock,std.error,14314.94,0.04,11.32
+n_fireplaces,estimate,10025.21,0.04,11.21
+n_fireplaces,std.error,1601.38,0,1.27
+pct_canopy_cov,estimate,-9512.62,-0.02,-6.97
+pct_canopy_cov,std.error,4101.76,0.01,3.24
+pct_conCovrly,estimate,31405.5,0.09,28.82
+pct_conCovrly,std.error,8412.11,0.02,6.65
+pct_conFld100,estimate,11352.73,-0.03,1.08
+pct_conFld100,std.error,14848.46,0.04,11.74
+pct_conPovrly,estimate,-6734.42,-0.02,-5.97
+pct_conPovrly,std.error,100566.41,0.25,79.5
+percent_vacant,estimate,3302.84,0.02,4.43
+percent_vacant,std.error,2818.19,0.01,2.23
+taxlot_area,estimate,1.78,0,0
+taxlot_area,std.error,0.12,0,0
+totalsqft,estimate,56.97,0,0.04
+totalsqft,std.error,1.2,0,0

@@ -1,6 +1,11 @@
 ---
-title: "Pretty_SFR"
-output: word_document
+title: "Single Family Residential Regression Results"
+subtitle: "For ECONorthwest"
+author: "Salma Huque"
+date: "04/01/20"
+output:
+  pdf_document: default
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -9,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ### Import Packages + Read in Data
 
-```{r, include = FALSE}
+```{r, include = TRUE, warning = FALSE, message = FALSE}
 library(tidyverse)
 library(magrittr)
 library(here)
@@ -26,9 +31,12 @@ library(lubridate)
 thesis_data <- read_csv(here::here("DATA","thesis-data.csv"))
 ```
 
+### Cleaning
 
-```{r, echo = FALSE}
-# Split Data
+This chunk cleans the single-family residential data. It involves selecting the appropriate variables, and flagging certain variables in order to determine which transactions can be considered "arms length". This chunk also summarizes the multiple variables originally created for basements, attics, garages, etc. (the original dataset had multiple types of each) and creates a numeric and dummy version of each. 
+
+```{r, echo = TRUE, warning = FALSE, message = FALSE}
+# Subset Data by Single Family Residential
 SFR <- thesis_data %>%
   filter(PRPCD_DESC == "RESIDENTIAL IMPROVED", prop_type == "Single-family")
 
@@ -107,7 +115,9 @@ dat1 %<>%
 
 ### Exploration
 
-```{r, eval = FALSE, echo = FALSE}
+This chunk looks at some of the control variables in order to determine any necessary changes to functional form, and to further inform cleaning. 
+
+```{r, eval = FALSE, echo = TRUE, message = FALSE}
 
 # A Look at the Dataset-------------------------------------------------
 
@@ -163,7 +173,9 @@ for (i in seq_along(nm)) {
 
 ### Regressions
 
-```{r, echo = FALSE}
+I have included two of my preliminary regressions here: a linear regression and a Box-Cox regression. Apologies that the results tables are so long! I had both neighborhood and high school districting fixed effects. 
+
+```{r, echo = TRUE, mssage = FALSE}
 
 # LINEAR REGRESSION-----------------------------------------
 
@@ -175,13 +187,13 @@ sfr_lin = formula(paste0("SALEPRICE ~
 sfr_lin_mod <- lm(sfr_lin, dat1)
 summary(sfr_lin_mod)
 
-#plot(sfr_lin_mod)
+plot(sfr_lin_mod)
 
 
 
 # BOX-COX (LINEAR) REGRESSION--------------------------------------------
 
-bc = boxcox(sfr_mod_linear, lamba = seq(-3, 3, 1))
+bc = boxcox(sfr_lin_mod, lamba = seq(-3, 3, 1))
 best_lam = bc$x[which(bc$y == max(bc$y))]
 dat1 %<>% 
   mutate(SALEPRICEbc = SALEPRICE^best_lam)
@@ -195,31 +207,4 @@ sfr_mod_bc <- lm(sfr_bc, dat1)
 summary(sfr_mod_bc)
 
 #plot(sfr_mod_bc)
-
-
-
-# SEMI-LOG REGRESSION-------------------------------------------
-
-dat1 %<>% 
-  mutate(SALEPRICElog = log(SALEPRICE))
-
-#pre-analysis formula
-sfr_log = formula(paste0("SALEPRICElog ~ 
-                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + yearbuilt + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_dum + attic_dum + bsmt_dum + year_sold + MapLabel + HIGH_SCH + ", con_names))
-
-# regression
-sfr_mod_log <- lm(sfr_log, dat1)
-summary(sfr_mod_log)
-
-#plot(sfr_mod_log)
-
-
-#--------------------------------------------------
-stargazer(sfr_mod_linear, sfr_mod_log, sfr_mod_bc, type="html", out="models.htm")
-
 ```
-
-
-
-
-

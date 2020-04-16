@@ -170,6 +170,7 @@ trust <- test1 %>%
   filter(top_1 == TRUE) %>%
   summarise(mean = mean(SALEPRICE),
             median = median(SALEPRICE))
+
 #-------------------- BEGINNING RYAN CODE ------------------------
 
 #garage sqft

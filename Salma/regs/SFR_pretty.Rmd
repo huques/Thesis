@@ -1,0 +1,563 @@
+---
+title: "Pretty_SFR"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Import Packages + Read in Data
+
+```{r, include = TRUE}
+library(tidyverse)
+library(magrittr)
+library(here)
+library(data.table)
+library(MASS)
+library(xtable)
+library(knitr)
+library(stargazer)
+library(pander)
+library(kableExtra)
+library(lubridate)
+
+# read in csv
+thesis_data <- read_csv(here::here("DATA","thesis-data.csv"))
+```
+
+
+```{r, echo = TRUE}
+# Split Data
+SFR <- thesis_data %>%
+  filter(PRPCD_DESC == "RESIDENTIAL IMPROVED", prop_type == "Single-family")
+
+# Clean SFR Dataframe
+test1 <- SFR %>%
+  dplyr::select(-c(OWNER2, OWNER3, OWNERZIP, 
+            MKTVALYR1, MKTVALYR2,
+            BLDGVAL1, BLDGVAL2,
+            LANDVAL1, LANDVAL2,  
+            TOTALVAL1, TOTALVAL2,
+            MS_GRADE, ES_GRADE,
+            LEGAL_DESC, TAXCODE, PROP_CODE, LANDUSE, BEDROOMS, ACC_STATUS, NAME, COMMPLAN, SHARED, COALIT, HORZ_VERT, AUDIT_NBRH, MIDDLE_SCH,  Category, SOURCE, FRONTAGE, COUNTY, YEARBUILT, bldgtype)) %>%
+  mutate(top_1 =  SALEPRICE > quantile(SALEPRICE, .99),
+         MKTVALYR3 = case_when(MKTVALYR3 != 2018 ~ 2017, 
+                                         TRUE ~ 2018),
+         price_diff = SALEPRICE - LANDVAL3, 
+         price_ratio = SALEPRICE/LANDVAL3 * 100,
+         vacant_dummy = PRPCD_DESC == "VACANT LAND",
+         llc_flag = grepl("LLC", OWNER1),
+         proud_flag =  grepl("PROUD", OWNER1),
+         trust_flag = grepl("TRUST", OWNER1) & !grepl("FAMILY", OWNER1) & !grepl("LIVING", OWNER1)) %>%
+  mutate(arms_length = price_ratio > 20,
+         yearbuilt = na_if(yearbuilt, 0))
+
+# switch the NAs in the constraints to 0s
+to0 <- function(x){ifelse(is.na(x), 0, x)}
+
+# Make a string of constraints and percent canopy names called "con_names"
+clean <- SFR %>%
+  dplyr::select(contains("con"), contains("pct")) %>%
+  dplyr::select(-c("CONCRETE", "FIN SECOND", "PAVING/CONCRETE ONLY", "UNF SECOND", "conFldway", "pct_conFldway")) 
+clean_names <- names(clean)
+con_names <- paste(clean_names, collapse = " + ")
+
+# removing observations 
+dat1 <- test1 %>% #25,266
+  mutate_at(vars(clean_names), to0) %>%
+  filter(top_1 == FALSE, #25,013, #253
+         arms_length == TRUE, #24,495 #472
+         vacant_dummy == FALSE, #24,495 #0
+         proud_flag == FALSE, #24,480 #15
+         llc_flag == FALSE, #24,128 #413
+         trust_flag == FALSE #24,081 #52
+  )
+
+#garage sqft
+gar_sqft_sum <- dat1 %>%
+  dplyr::select(matches("gar"), matches("car")) %>%
+  rowSums()
+
+#deck/patio/porch sqft
+deck_sqft_sum <- dat1 %>%
+  dplyr::select(matches("deck"), matches("patio"), matches("porch")) %>%
+  rowSums()
+
+# attic sqft
+attic_sqft_sum <- dat1 %>%
+  dplyr::select(matches("attic")) %>%
+  rowSums()
+
+# basement sqft
+bsmt_sqft_sum <- dat1 %>%
+  dplyr::select(matches("bsmt")) %>%
+  dplyr::select(-c("BSMT PARKING","BSMT GAR")) %>%
+  rowSums()
+  
+dat1 %<>%
+  mutate(garage_sqft = gar_sqft_sum,
+         garage_dum = garage_sqft > 0,
+         deck_sqft = deck_sqft_sum,
+         deck_dum = deck_sqft > 0,
+         attic_sqft = attic_sqft_sum,
+         attic_dum = attic_sqft > 0,
+         bsmt_sqft = bsmt_sqft_sum,
+         bsmt_dum = bsmt_sqft > 0,
+         saledate = mdy(saledate), 
+         year_sold = year(saledate),
+         age_sold = year_sold - yearbuilt,
+         n_fireplaces = replace_na(n_fireplaces, 0)) %>%
+  filter(between(totalsqft, 1, 7500), 
+         yearbuilt > 1500,
+         f_baths < 6,
+         BLDGSQFT != 0,
+         age_sold < 0)
+
+dat1 %>% filter(age_sold < 0)
+
+# need to check if improvements square feet add up to SQFT 
+```
+
+
+### Exploration
+
+```{r, eval = FALSE, echo = TRUE}
+
+# A Look at the Dataset-------------------------------------------------
+
+salma <- summary(dat1) # notes in thesis notebook
+
+controls <- dat1 %>%
+  dplyr::select(price_diff, pct_canopy_cov, taxlot_area, yearbuilt, totalsqft, dist_ugb, dist_cityhall, percent_vacant, CN_score, 
+         SALEPRICE)
+nm <- names(controls)
+
+# Correlation-------------------------------------------------
+
+correlation <- cor(controls, use = "pairwise.complete.obs")
+#takes only obs for which both vars are not NA
+
+# Scatterplots-------------------------------------------------
+
+for (i in seq_along(nm)) {
+  print(names(controls[i]))
+  print(ggplot(controls, aes_string(y = nm[length(nm)], x = nm[i])) + 
+    geom_point(alpha = 0.1) +
+    geom_smooth())
+}
+
+ggplot(dat1, aes(y = SALEPRICE, x = TOTALVAL3)) + 
+    geom_point(alpha = 0.1)
+
+ggplot(dat1, aes(y = log(SALEPRICE), x = taxlot_area)) + 
+    geom_point(alpha = 0.1)
+
+# Outliers -- Box Plots-------------------------------------------------
+
+# best for discrete x
+
+for (i in seq_along(nm)) {
+  print(names(controls[i]))
+  print(ggplot(controls, aes_string(y = nm[length(nm)], x = nm[i])) + 
+    geom_boxplot(alpha = 0.1))
+}
+
+# Distribution -- Density Plots---------------------------------
+
+# Now to check the linearity of the variables it is a good practice to plot distribution graph and look for skewness of features. Kernel density estimate (kde) is a quite useful tool for plotting the shape of a distribution.
+
+for (i in seq_along(nm)) {
+  print(names(controls[i]))
+  print(ggplot(controls, aes_string(x = nm[i])) + 
+    geom_histogram(bins = 50))
+}
+
+
+# Summary Statistics Table ------------------------------------------
+sumstat <- dat1 %>%
+    # Select and rename
+    dplyr::select(
+        `Complete Neighborhoods Score (0-100)` = CN_score,
+        `Vacant Properties in 200ft Radius (%)` = percent_vacant,
+        `Distance to Central Business District (ft)` = dist_cityhall,
+        `Distance to Urban Growth Boundary (ft)` = dist_ugb,
+        `Building Footprint (sqft)` = totalsqft,
+        `Age When Sold` = age_sold,
+        `Full Baths` = f_baths,
+        `Half Baths` = h_baths,
+        `Fireplaces` = n_fireplaces,
+        `Accessible Dwelling Unit Dummy` = ADUdummy,
+        `Canopy Cover (%)` = pct_canopy_cov,
+        `Taxlot Area (sqft)` = taxlot_area,
+        `Garage Dummy` = garage_dum,
+        `Garage (sqft)` = garage_sqft,
+        `Attic Dummy` = attic_dum,
+        `Attic (sqft)` = attic_sqft,
+        `Basement Dummy` = bsmt_dum,
+        `Basement (sqft)` = bsmt_sqft,
+        `Deck Dummy` = deck_dum,
+        `Deck (sqft)` = deck_sqft
+        ) %>%
+
+    # Find the mean, st. dev., min, and max for each variable 
+    summarise_all(funs(mean, sd, min, max)) %>%
+
+    # Move summary stats to columns
+    gather(key, value, everything()) %>% 
+    separate(key, into = c("variable", "stat"), sep = "_") %>%
+    spread(stat, value) %>%
+
+    # Set order of summary statistics 
+    dplyr::select(variable, mean, sd, min, max) %>%
+
+    # Round all numeric variables to one decimal point
+    mutate_if(is.numeric, funs(round(., 1)))
+
+# Write to .txt
+write.table(sumstat, file = "sumstats.txt", sep = ",", quote = FALSE, row.names = F)
+
+```
+
+
+### Pre-analysis Regressions: Dummy Improvements, Neighborhoods, High Schools, CN_score
+
+```{r, echo = TRUE}
+
+# LINEAR REGRESSION-----------------------------------------
+
+# formula: only dummies, no percent except for percent canopy cover
+sfr_lin = formula(paste0("SALEPRICE ~ 
+                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_dum + attic_dum + bsmt_dum + deck_dum + age_sold + MapLabel + HIGH_SCH + ", con_names))
+
+# reg
+sfr_lin_mod <- lm(sfr_lin, dat1)
+summary(sfr_lin_mod)
+
+#plot(sfr_lin_mod)
+
+
+
+# BOX-COX (LINEAR) REGRESSION--------------------------------------------
+
+bc = boxcox(sfr_lin_mod, lamba = seq(-3, 3, 1))
+best_lam = bc$x[which(bc$y == max(bc$y))]
+dat1 %<>% 
+  mutate(SALEPRICEbc = SALEPRICE^best_lam)
+
+# pre-analysis formula
+sfr_bc = formula(paste0("SALEPRICEbc ~ 
+                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_dum + attic_dum + bsmt_dum + deck_dum + age_sold + MapLabel + HIGH_SCH + ", con_names))
+
+# regression
+sfr_mod_bc <- lm(sfr_bc, dat1)
+summary(sfr_mod_bc)
+
+#plot(sfr_mod_bc)
+
+
+
+# SEMI-LOG REGRESSION-------------------------------------------
+
+dat1 %<>% 
+  mutate(SALEPRICElog = log(SALEPRICE))
+
+#pre-analysis formula
+sfr_log = formula(paste0("SALEPRICElog ~ 
+                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_dum + attic_dum + bsmt_dum + deck_dum + age_sold + MapLabel + HIGH_SCH + ", con_names))
+
+# regression
+sfr_mod_log <- lm(sfr_log, dat1)
+summary(sfr_mod_log)
+
+#plot(sfr_mod_log)
+
+# OUTPUT-----------------------------------------------------------
+
+stargazer(
+  sfr_lin_mod, sfr_mod_log, sfr_mod_bc,
+  title = "Three Regression Models Predicting Constraints Effects on Sale Price",
+  column.labels = c("Linear", "Semi-Log", "Box-Cox"),
+  keep.stat = c("rsq", "adj.rsq"),
+  notes.align = "l",
+  type="html", out="models.htm"
+  )
+
+# stargazer(
+#   sfr_lin_mod, sfr_mod_log, sfr_mod_bc,
+#   type = "html",
+#   title = "Three Regression Models Predicting Constraints Effects on Sale Price",
+#   column.labels = c("Linear", "Semi-Log", "Box-Cox"),
+#   colnames = FALSE,
+#   model.numbers = FALSE,
+#   dep.var.caption = " ",
+#   dep.var.labels = "Peer rating (1-5 scale)",
+#   covariate.labels = c("Ph.D. acceptance rate", "Enrollment"),
+#   keep.stat = c("rsq", "f"),
+#   notes.align = "l",
+#   add.lines = list(c("Corrected AIC", round(AICc(lm.1), 1), round(AICc(lm.2), 1), round(AICc(lm.3), 1))),
+#   out = "images/table1.html"
+#   )
+
+library(broom)
+sfr_mod_bc <- tidy(lm(sfr_bc, dat1))
+sfr_mod_log <- tidy(lm(sfr_log, dat1))
+sfr_lin_mod <- tidy(lm(sfr_lin, dat1))
+
+all_models <- rbind_list(
+    sfr_lin_mod %>% mutate(model = 1),
+    sfr_mod_log %>% mutate(model = 2),
+    sfr_mod_bc %>% mutate(model = 3))
+
+all_models
+
+ols_table <- all_models %>%
+    dplyr::select(-statistic, -p.value) %>%
+    mutate_each(funs(round(., 2)), -term) %>% 
+    gather(key, value, estimate:std.error) %>%
+    spread(model, value) 
+
+ols_table
+```
+
+### Regressions 2: Dummy vs. SQFT Improvements
+
+```{r}
+# LINEAR REGRESSION DUMMY-----------------------------------------
+
+# formula: only dummies, no percent except for percent canopy cover
+dummy = formula(paste0("SALEPRICE ~ 
+                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_dum + attic_dum + bsmt_dum + deck_dum + age_sold + MapLabel + HIGH_SCH + ", con_names))
+
+# reg
+dummy_mod <- lm(dummy, dat1)
+summary(dummy_mod)
+
+#plot(sfr_lin_mod)
+
+# LINEAR REGRESSION SQFT-----------------------------------------
+
+# formula: only dummies, no percent except for percent canopy cover
+sqft = formula(paste0("SALEPRICE ~ 
+                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_sqft + attic_sqft + bsmt_sqft + deck_sqft + age_sold + MapLabel + HIGH_SCH + ", con_names))
+
+# reg
+sqft_mod <- lm(sqft, dat1)
+summary(sqft_mod)
+
+#plot(sfr.lin.sqft_mod)
+
+# OUTPUT-----------------------------------------------------------
+
+stargazer(dummy_mod, sqft_mod, type="html", out="models_dummy.htm")
+# kable(star.1)
+# pander(summary(sfr_mod_linear, sfr_mod_log)) 
+
+```
+
+
+### Switching CN_score, neighborhood, and elementary school, and County??
+
+note that elementary school is included in cn score
+
+```{r}
+# PREANALYSIS LINEAR REGRESSION-----------------------------------------
+
+# formula: only dummies, no percent except for percent canopy cover
+sfr_lin = formula(paste0("SALEPRICE ~ 
+                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_dum + attic_dum + bsmt_dum + deck_dum + age_sold + MapLabel + HIGH_SCH + ", con_names))
+
+# reg
+sfr_lin_mod <- lm(sfr_lin, dat1)
+summary(sfr_lin_mod)
+
+#plot(sfr_lin_mod)
+
+# ONLY CN_SCORE, no neighborhood, highschool-----------------------------------------
+
+# formula: only dummies, no percent except for percent canopy cover
+cn = formula(paste0("SALEPRICE ~ 
+                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_sqft + attic_sqft + bsmt_sqft + deck_sqft + age_sold + ", con_names))
+
+# reg
+cn_mod <- lm(cn, dat1)
+summary(cn_mod)
+
+#plot(sfr.lin.sqft_mod)
+
+
+# ONLY NEIGHBORHOOD FIXED EFFECTS, no cn_score, high school-----------------------------
+
+# formula: only dummies, no percent except for percent canopy cover
+neighborhood = formula(paste0("SALEPRICE ~ 
+                             percent_vacant + dist_cityhall + dist_ugb + totalsqft + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_sqft + attic_sqft + bsmt_sqft + deck_sqft + age_sold + MapLabel + ", con_names))
+
+# reg
+neighborhood_mod <- lm(neighborhood, dat1)
+summary(neighborhood_mod)
+
+#plot(sfr.lin.sqft_mod)
+
+
+
+# ONLY HIGH SCHOOL, no neighborhood or cn_score-----------------------------------------
+
+# formula: only dummies, no percent except for percent canopy cover
+hs = formula(paste0("SALEPRICE ~ 
+                             percent_vacant + dist_cityhall + dist_ugb + totalsqft + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_sqft + attic_sqft + bsmt_sqft + deck_sqft + age_sold + HIGH_SCH + ", con_names))
+
+# reg
+hs_mod <- lm(hs, dat1)
+summary(hs_mod)
+
+#plot(sfr.lin.sqft_mod)
+
+
+# Replace high school with elementary school, keep all----------------------------------
+
+# formula: only dummies, no percent except for percent canopy cover
+es_all = formula(paste0("SALEPRICE ~ 
+                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_sqft + attic_sqft + bsmt_sqft + deck_sqft + age_sold + MapLabel + ELEM_SCH + ", con_names))
+
+# reg
+es_all_mod <- lm(es_all, dat1)
+summary(es_all_mod)
+
+# Replace high school with elementary school, remove cn_score and neighborhoods---------
+
+# formula: only dummies, no percent except for percent canopy cover
+es = formula(paste0("SALEPRICE ~ 
+                             percent_vacant + dist_cityhall + dist_ugb + totalsqft + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_sqft + attic_sqft + bsmt_sqft + deck_sqft + age_sold + ELEM_SCH + ", con_names))
+
+# reg
+es_mod <- lm(es, dat1)
+summary(es_mod)
+
+
+#plot(sfr.lin.sqft_mod)
+# OUTPUT-----------------------------------------------------------
+
+stargazer(
+  sfr_lin_mod, es_all_mod, cn_mod, neighborhood_mod, hs_mod, es_mod, 
+  title = "Varying Spatial Effects",
+  column.labels = c("Linear", "Elementary School, all", "Complete Neighborhoods Score", "Neighborhood FE", "High School", "Elementary School"),
+  type="html", 
+  out="models_spatial.htm")
+
+# kable(star.1)
+# pander(summary(sfr_mod_linear, sfr_mod_log)) 
+```
+
+
+Adding in LLCs (per Jon’s comments)
+
+
+```{r}
+# PREANALYSIS LINEAR REGRESSION-----------------------------------------
+
+# formula: only dummies, no percent except for percent canopy cover
+sfr_lin = formula(paste0("SALEPRICE ~ 
+                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_dum + attic_dum + bsmt_dum + deck_dum + age_sold + MapLabel + HIGH_SCH + ", con_names))
+
+# reg
+sfr_lin_mod <- lm(sfr_lin, dat1)
+summary(sfr_lin_mod)
+
+
+# ADD IN LLCS--------------------------------------------------------------
+
+dat_llc <- test1 %>% #25,266
+  mutate_at(vars(clean_names), to0) %>%
+  filter(top_1 == FALSE, #25,013, #253
+         arms_length == TRUE, #24,495 #472
+         vacant_dummy == FALSE, #24,495 #0
+         proud_flag == FALSE, #24,480 #15
+         trust_flag == FALSE #24,081 #52
+  )
+
+#garage sqft
+gar_sqft_sum <- dat_llc %>%
+  dplyr::select(matches("gar"), matches("car")) %>%
+  rowSums()
+
+#deck/patio/porch sqft
+deck_sqft_sum <- dat_llc %>%
+  dplyr::select(matches("deck"), matches("patio"), matches("porch")) %>%
+  rowSums()
+
+# attic sqft
+attic_sqft_sum <- dat_llc %>%
+  dplyr::select(matches("attic")) %>%
+  rowSums()
+
+# basement sqft
+bsmt_sqft_sum <- dat_llc %>%
+  dplyr::select(matches("bsmt")) %>%
+  dplyr::select(-c("BSMT PARKING","BSMT GAR")) %>%
+  rowSums()
+
+dat_llc %<>%
+  mutate(garage_sqft = gar_sqft_sum,
+         garage_dum = garage_sqft > 0,
+         deck_sqft = deck_sqft_sum,
+         deck_dum = deck_sqft > 0,
+         attic_sqft = attic_sqft_sum,
+         attic_dum = attic_sqft > 0,
+         bsmt_sqft = bsmt_sqft_sum,
+         bsmt_dum = bsmt_sqft > 0,
+         saledate = mdy(saledate), 
+         year_sold = year(saledate),
+         n_fireplaces = replace_na(n_fireplaces, 0)) %>%
+  filter(between(totalsqft, 1, 7500), 
+         yearbuilt > 1500,
+         f_baths < 6,
+         BLDGSQFT != 0)
+
+
+# formula: only dummies, no percent except for percent canopy cover
+llc = formula(paste0("SALEPRICE ~ 
+                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_dum + attic_dum + bsmt_dum + deck_dum + age_sold + MapLabel + HIGH_SCH + ", con_names))
+
+# reg
+llc_mod <- lm(llc, dat_llc)
+summary(llc_mod)
+
+
+#plot(sfr.lin.sqft_mod)
+# OUTPUT-----------------------------------------------------------
+
+stargazer(
+  sfr_lin_mod, llc_mod, 
+  title = "Varying Spatial Effects",
+  column.labels = c("Linear", "LLC all included"),
+  type="html", 
+  out="models_llc.htm")
+
+```
+
+Incorporating zoning history
+
+```{r}
+
+```
+
+PLAYING AROUND WITH VACANT DUMMY VS PERCENT VACANT (AND OTHER PERCENT CONSTRAINTS)
+
+
+```{r}
+
+```
+
+
+Control-specific transformations (ie sqft vs sqft-squared)
+PLAYING AROUND WITH PRICE RATIO
+
+# Output Tables
+
+```{r}
+summary(dat1) %>% kable
+stargazer(sfr_lin_mod, sfr_mod_log, sfr_mod_bc, type="html", out="models.htm")
+```
+
