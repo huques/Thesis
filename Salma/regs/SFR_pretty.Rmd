@@ -3,6 +3,8 @@ title: "Pretty_SFR"
 output:
   pdf_document: default
   word_document: default
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -96,8 +98,25 @@ bsmt_sqft_sum <- dat1 %>%
   dplyr::select(matches("bsmt")) %>%
   dplyr::select(-c("BSMT PARKING","BSMT GAR")) %>%
   rowSums()
-  
+
+# creating zone change dummy
+zone_test <- dat1 %>% 
+  dplyr::select(STATE_ID, matches("zone"), -c(ZONE_DESC_aug2016, ZONE_DESC_aug2018, ZONE_DESC_feb2018, `Zone Description`)) %>%
+  mutate_at(vars(-STATE_ID), str_replace, pattern = "R", replacement = "") %>%
+  mutate_at(vars(-STATE_ID), funs(as.numeric))
+
+zone_test1 <- zone_test %>%
+  mutate_if(is.numeric, rowSums(zone_test)) %>% # this line is causing me problems
+    # rowSums is a dumb function doesnt want to play nicely with mutate, even if i specify using mutate_if or mutate_at. manually involves naming the columns inside the row sums. need state id in order to join. c
+  mutate(change = rowSums(zone_test)/10,
+         zone_change = case_when(change < 20 ~ FALSE,
+                                 TRUE ~ TRUE))
+
+# removing zone columns 
+
+# big boi
 dat1 %<>%
+  dplyr::select(-c(matches("zone"))) %>%
   mutate(garage_sqft = gar_sqft_sum,
          garage_dum = garage_sqft > 0,
          deck_sqft = deck_sqft_sum,
@@ -109,15 +128,15 @@ dat1 %<>%
          saledate = mdy(saledate), 
          year_sold = year(saledate),
          age_sold = year_sold - yearbuilt,
-         n_fireplaces = replace_na(n_fireplaces, 0)) %>%
+         n_fireplaces = replace_na(n_fireplaces, 0),
+         percent_vacant = percent_vacant*100) %>%
   filter(between(totalsqft, 1, 7500), 
          yearbuilt > 1500,
          f_baths < 6,
          BLDGSQFT != 0,
-         age_sold < 0)
+         age_sold > 0)
 
-dat1 %>% filter(age_sold < 0)
-
+will <- thesis_data %>% filter(RNO == "R193903290")
 # need to check if improvements square feet add up to SQFT 
 ```
 
@@ -128,12 +147,12 @@ dat1 %>% filter(age_sold < 0)
 
 # A Look at the Dataset-------------------------------------------------
 
-salma <- summary(dat1) # notes in thesis notebook
-
 controls <- dat1 %>%
-  dplyr::select(price_diff, pct_canopy_cov, taxlot_area, yearbuilt, totalsqft, dist_ugb, dist_cityhall, percent_vacant, CN_score, 
+  dplyr::select(price_diff, pct_canopy_cov, taxlot_area, age_sold, totalsqft, dist_ugb, dist_cityhall, percent_vacant, f_baths, h_baths, n_fireplaces, 
          SALEPRICE)
 nm <- names(controls)
+
+#, ADUdummy, garage_dum, attic_dum, bsmt_dum, deck_dum, MapLabel, HIGH_SCH, CN_score
 
 # Correlation-------------------------------------------------
 
@@ -146,7 +165,7 @@ for (i in seq_along(nm)) {
   print(names(controls[i]))
   print(ggplot(controls, aes_string(y = nm[length(nm)], x = nm[i])) + 
     geom_point(alpha = 0.1) +
-    geom_smooth())
+    stat_smooth())
 }
 
 ggplot(dat1, aes(y = SALEPRICE, x = TOTALVAL3)) + 
@@ -181,17 +200,20 @@ sumstat <- dat1 %>%
     # Select and rename
     dplyr::select(
         `Complete Neighborhoods Score (0-100)` = CN_score,
-        `Vacant Properties in 200ft Radius (%)` = percent_vacant,
         `Distance to Central Business District (ft)` = dist_cityhall,
         `Distance to Urban Growth Boundary (ft)` = dist_ugb,
+        
         `Building Footprint (sqft)` = totalsqft,
+        `Taxlot Area (sqft)` = taxlot_area,
         `Age When Sold` = age_sold,
         `Full Baths` = f_baths,
         `Half Baths` = h_baths,
         `Fireplaces` = n_fireplaces,
+        
         `Accessible Dwelling Unit Dummy` = ADUdummy,
         `Canopy Cover (%)` = pct_canopy_cov,
-        `Taxlot Area (sqft)` = taxlot_area,
+        `Vacant Properties in 200ft Radius (%)` = percent_vacant,
+        
         `Garage Dummy` = garage_dum,
         `Garage (sqft)` = garage_sqft,
         `Attic Dummy` = attic_dum,
@@ -442,8 +464,8 @@ summary(es_mod)
 stargazer(
   sfr_lin_mod, es_all_mod, cn_mod, neighborhood_mod, hs_mod, es_mod, 
   title = "Varying Spatial Effects",
+  sep.width = 0,
   column.labels = c("Linear", "Elementary School, all", "Complete Neighborhoods Score", "Neighborhood FE", "High School", "Elementary School"),
-  type="html", 
   out="models_spatial.htm")
 
 # kable(star.1)
@@ -532,7 +554,6 @@ stargazer(
   sfr_lin_mod, llc_mod, 
   title = "Varying Spatial Effects",
   column.labels = c("Linear", "LLC all included"),
-  type="html", 
   out="models_llc.htm")
 
 ```
@@ -540,6 +561,7 @@ stargazer(
 Incorporating zoning history
 
 ```{r}
+
 
 ```
 
@@ -554,10 +576,25 @@ PLAYING AROUND WITH VACANT DUMMY VS PERCENT VACANT (AND OTHER PERCENT CONSTRAINT
 Control-specific transformations (ie sqft vs sqft-squared)
 PLAYING AROUND WITH PRICE RATIO
 
-# Output Tables
-
 ```{r}
-summary(dat1) %>% kable
-stargazer(sfr_lin_mod, sfr_mod_log, sfr_mod_bc, type="html", out="models.htm")
+# PREANALYSIS LINEAR REGRESSION-----------------------------------------
+
+# formula: only dummies, no percent except for percent canopy cover
+dat1 %<>%
+  mutate(LOGdist_ugb = ln(dist_ugb),
+         LOGdist_cityhall = ln(dist_cityhall),
+         SQUAREDtotalsqft = totalsqft*totalsqft
+         )
+
+
+sfr_lin = formula(paste0("SALEPRICE ~ 
+                             CN_score + percent_vacant + dist_cityhall + dist_ugb + totalsqft + f_baths + h_baths + n_fireplaces + ADUdummy + pct_canopy_cov + taxlot_area + garage_dum + attic_dum + bsmt_dum + deck_dum + age_sold + MapLabel + HIGH_SCH + ", con_names))
+
+# reg
+sfr_lin_mod <- lm(sfr_lin, dat1)
+summary(sfr_lin_mod)
+
+#plot(sfr_lin_mod)
+
 ```
 
