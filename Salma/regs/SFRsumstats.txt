@@ -1,0 +1,64 @@
+key,mean,sd,min,max
+Assessed Land Value (2017),202565.2,74074.27,4100,1174750
+Assessed Market Value (2017),249705.83,137899.72,0,1433640
+Total Assessed Value (2017),452276.96,193186.6,7330,2065270
+Sale Price,442628.8,195050.07,24732,1395000
+Log Sale Price,12.91,0.43,10.12,14.15
+Age When Sold,66.33,29.81,0.5,157
+Building Footprint (sqft),1811.59,824.74,100,7494
+Building Footprint Squared (sqft),3962026.95,4124052.24,10000,56160036
+Taxlot Area (sqft),7574.97,8009.42,1034.77,355500.14
+Taxlot Area Squared (sqft),121528156,1229505241.36,1070747.38,126380348686.82
+Building Volume,22717.28,12929.66,0,160787
+Full Baths,1.75,0.74,0,5
+Half Baths,0.3,0.49,0,5
+Fireplaces,0.77,0.48,0,3
+Fireplaces Dummy,0.74,0.44,0,1
+Accessible Dwelling Unit Dummy,0.01,0.12,0,1
+Garage Dummy,0.81,0.39,0,1
+Garage Area (sqft),2163.57,1420.23,0,11496
+Attic Dummy,0.27,0.44,0,1
+Attic Area (sqft),853.68,1487.04,0,8208
+Basement Dummy,0.58,0.49,0,1
+Basement Area (sqft),2105.55,2338.31,0,11696
+Deck Dummy,0.67,0.47,0,1
+Deck Area (sqft),1640.91,1934.92,0,13564
+Vacant Properties in 200ft Radius (%),59.18,30.17,0,100
+Vacant Properties in 200ft Radius Dummy,0,0,0,0
+Canopy Cover (% of lot),0.29,0.19,0,1
+Canopy Cover (sqft),2630.51,5784.41,0,214048.48
+Canopy Cover Dummy,0.99,0.12,0,1
+Zoning Change Dummy,0.46,0.5,0,1
+Complete Neighborhoods Score (0-100),56.71,17.42,1,94
+Distance to Central Business District (ft),25778,9831.62,3134.73,52807.04
+Distance to Urban Growth Boundary (ft),18814.75,7435.38,27.12,34315.31
+DEQ Environmental Cleanup Sites (ECSI),0,0.01,0,1
+DEQ Leaking Underground Storage Tank Cleanup Sites (LUST),0,0.01,0,1
+Historic and Conservation Districts,0.03,0.16,0,1
+Historic and Conservation Landmarks,0,0.01,0,1
+Areas Requiring Archeological Scan or Consultation with Tribes,0,0,0,0
+Approach and Departure Cones,0.19,0.39,0,1
+Helipad Landing,0,0,0,0
+Airport Noise,0.01,0.1,0,1
+Greenway,0,0.02,0,1
+DOGAMI Landslide Hazard Area,0.18,0.39,0,1
+DOGAMI Digital Landslide Database (SLIDO),0.02,0.13,0,1
+Slopes Over 25% Incline),0.07,0.25,0,1
+Institutional Campuses,0,0,0,0
+Private/Common Open Space,0,0.01,0,1
+Publicly Owned Lots (non-residential),0,0.02,0,1
+Sewer System,0,0.07,0,1
+Stormwater System,0.08,0.27,0,1
+Water System,0.04,0.19,0,1
+Traffic Volume Exceeds Capacity,0.07,0.25,0,1
+ODOT Highway Interchanges,0.08,0.28,0,1
+Substandard and Unimproved Streets,0.33,0.47,0,1
+Scenic Views,0,0,0,0
+Conservation Zones,0.04,0.21,0,1
+Preservation Zones,0.02,0.14,0,1
+Wetlands,0,0.03,0,1
+FEMA 100-Year Floodplain Map,0.01,0.09,0,1
+Percent of Preservation Zones,0,0.01,0,1
+Percent of Conservation Zones,0.01,0.09,0,1
+Percent of Wetlands,0,0,0,0
+Percent of FEMA 100_Year Floodplain Map,0,0.06,0,1

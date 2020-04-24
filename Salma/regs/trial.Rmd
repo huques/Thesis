@@ -1,0 +1,840 @@
+---
+title: "output_ryanstyle"
+output: word_document
+---
+---
+title: "SFR_final"
+output: pdf_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Import Packages + Read in Data
+
+```{r, include = TRUE}
+library(tidyverse)
+library(magrittr)
+library(here)
+library(data.table)
+library(MASS)
+library(knitr)
+library(stargazer)
+library(kableExtra)
+library(lubridate)
+library(mapview)
+library(sf)
+
+# read in csv
+thesis_data <- read_csv(here::here("DATA","thesis-data.csv"))
+```
+
+# Wrangling
+
+```{r, echo = TRUE}
+# Split Data
+SFR <- thesis_data %>%
+  filter(PRPCD_DESC == "RESIDENTIAL IMPROVED", prop_type == "Single-family")
+
+#-------------------------------------------------------------------------
+
+# Make a string of constraints and percent canopy names called "con_names"
+clean <- SFR %>%
+  dplyr::select(contains("con"), contains("pct")) %>%
+  dplyr::select(-c("CONCRETE", "FIN SECOND", "PAVING/CONCRETE ONLY", "UNF SECOND", "conFldway", "pct_conFldway")) 
+clean_names <- names(clean)
+con_names <- paste(clean_names, collapse = " + ")
+
+# switch the NAs in the constraints to 0s
+to0 <- function(x){ifelse(is.na(x), 0, x)}
+
+#-------------------------------------------------------------------------
+
+# Format SFR Dataframe: 
+# Select variables, mutate filtering parameters. No actual filtering done at this point, all SFR vars kept. 
+test1 <- SFR %>%
+  dplyr::select(-c(OWNER2, OWNER3, OWNERZIP, 
+            MKTVALYR1, MKTVALYR2,
+            BLDGVAL1, BLDGVAL2,
+            LANDVAL1, LANDVAL2,  
+            TOTALVAL1, TOTALVAL2,
+            MS_GRADE, ES_GRADE,
+            LEGAL_DESC, TAXCODE, 
+            PROP_CODE, LANDUSE, 
+            BEDROOMS, ACC_STATUS, 
+            NAME, COMMPLAN, SHARED, 
+            COALIT, HORZ_VERT, AUDIT_NBRH, 
+            MIDDLE_SCH,  Category, SOURCE, 
+            FRONTAGE, COUNTY, YEARBUILT, bldgtype)) %>%
+  mutate(top_1 =  SALEPRICE > quantile(SALEPRICE, .99),
+         MKTVALYR3 = case_when(MKTVALYR3 != 2018 ~ 2017, 
+                                         TRUE ~ 2018),
+         price_diff = SALEPRICE - LANDVAL3, 
+         price_ratio = SALEPRICE/LANDVAL3 * 100,
+         vacant_dummy = as.numeric(PRPCD_DESC == "VACANT LAND"),
+         llc_flag = grepl("LLC", OWNER1),
+         proud_flag =  grepl("PROUD", OWNER1),
+         trust_flag = grepl("TRUST", OWNER1) & !grepl("FAMILY", OWNER1) & !grepl("LIVING", OWNER1)) 
+
+#-------------------------------------------------------------------------
+
+#garage sqft
+gar_sqft_sum <- test1 %>%
+  dplyr::select(matches("gar"), matches("car")) %>%
+  rowSums()
+
+#deck/patio/porch sqft
+deck_sqft_sum <- test1 %>%
+  dplyr::select(matches("deck"), matches("patio"), matches("porch")) %>%
+  rowSums()
+
+# attic sqft
+attic_sqft_sum <- test1 %>%
+  dplyr::select(matches("attic")) %>%
+  rowSums()
+
+# basement sqft
+bsmt_sqft_sum <- test1 %>%
+  dplyr::select(matches("bsmt")) %>%
+  dplyr::select(-c("BSMT PARKING","BSMT GAR")) %>%
+  rowSums()
+
+# creating zone change dummy
+zone_test <- test1 %>%
+  dplyr::select(matches("zone"), -c(ZONE_DESC_aug2016, ZONE_DESC_aug2018, ZONE_DESC_feb2018, `Zone Description`, sale_zone)) %>%
+  mutate_all(str_replace, pattern = "R", replacement = "") %>%
+  mutate_all(funs(as.numeric)) %>%
+  rowSums()
+
+
+test1 %<>%
+  mutate(garage_sqft = gar_sqft_sum,
+         garage_dum = as.numeric(garage_sqft > 0),
+         deck_sqft = deck_sqft_sum,
+         deck_dum = as.numeric(deck_sqft > 0),
+         attic_sqft = attic_sqft_sum,
+         attic_dum = as.numeric(attic_sqft > 0),
+         bsmt_sqft = bsmt_sqft_sum,
+         bsmt_dum = as.numeric(bsmt_sqft > 0),
+         n_fireplaces = replace_na(n_fireplaces, 0),
+         fireplace_dum = as.numeric(n_fireplaces > 0),
+         ADUdummy = as.numeric(ADUdummy > 0),
+         total_canopy_cov = replace_na(total_canopy_cov, 0),
+         canopy_dum = as.numeric(total_canopy_cov > 0),
+         sum_z = zone_test,
+         avg_z = sum_z/9,
+         z_change = case_when(avg_z == 5 ~ 0,
+                                      TRUE ~ 1),
+         totalsqft_sqd = totalsqft*totalsqft,
+         taxlot_area_sqd = taxlot_area*taxlot_area)
+
+#-------------------------------------------------------------------------
+
+# Clean SFR dataframe: 
+# remove based on filtering parameters, set NAs as zero, add in improvements
+test2 <- test1 %>%
+  dplyr::select(-c(matches("zone"))) %>%
+  mutate_at(vars(clean_names), to0) %>%
+  mutate(arms_length = price_ratio > 20,
+         yearbuilt = na_if(yearbuilt, 0),
+         saledate = mdy(saledate), 
+         year_sold = year(saledate),
+         age_sold = year_sold - yearbuilt,
+         percent_vacant = percent_vacant*100,
+         SALEPRICElog = log(SALEPRICE)) %>%
+  filter(between(totalsqft, 1, 7500), 
+         yearbuilt > 1500,
+         f_baths < 6,
+         BLDGSQFT != 0,
+         age_sold > 0, 
+         top_1 == FALSE, 
+         arms_length == TRUE, 
+         vacant_dummy == FALSE, 
+         proud_flag == FALSE, 
+         llc_flag == FALSE,
+         trust_flag == FALSE) 
+
+#-------------------------------------------------------------------------
+
+# Select final relevant variables
+dat1 <- test2 %>%
+  dplyr::select(
+    STATE_ID, RNO, PROPERTYID, TLID, 
+    OWNER1, SITEADDR, SITEZIP, PRPCD_DESC, 
+    MKTVALYR3, LANDVAL3, BLDGVAL3, TOTALVAL3, 
+    saledate, SALEPRICE, SALEPRICElog, age_sold,
+    totalsqft, totalsqft_sqd, taxlot_area, taxlot_area_sqd, volume, 
+    f_baths, h_baths, n_fireplaces, fireplace_dum, ADUdummy, 
+    garage_sqft, garage_dum, deck_sqft, deck_dum, 
+    attic_sqft, attic_dum, bsmt_sqft, bsmt_dum, 
+    percent_vacant, vacant_dummy,
+    pct_canopy_cov, total_canopy_cov, canopy_dum, zone_change = z_change,
+    CN_score, Neighborhood = MapLabel, HIGH_SCH, ELEM_SCH, dist_cityhall, dist_ugb,
+    contains("con"), contains("pct")) %>%
+  dplyr::select(-c("CONCRETE", "FIN SECOND", "PAVING/CONCRETE ONLY", "UNF SECOND", "conFldway", "pct_conFldway")) 
+```
+
+# Summary Statistics
+
+```{r, echo = TRUE}
+
+sumdat <- dat1 %>%
+    # Select and rename
+    dplyr::select(
+        `Assessed Land Value (2017)` = LANDVAL3,
+        `Assessed Market Value (2017)` = BLDGVAL3,
+        `Total Assessed Value (2017)` = TOTALVAL3,
+        
+        `Sale Price` = SALEPRICE,
+        `Log Sale Price` = SALEPRICElog,
+        `Age When Sold` = age_sold,
+        `Building Footprint (sqft)` = totalsqft,
+        `Building Footprint Squared (sqft)` = totalsqft_sqd,
+        `Taxlot Area (sqft)` = taxlot_area,
+        `Taxlot Area Squared (sqft)` = taxlot_area_sqd,
+        `Building Volume` = volume,
+        
+        `Full Baths` = f_baths,
+        `Half Baths` = h_baths,
+        `Fireplaces` = n_fireplaces,
+        `Fireplaces Dummy` = fireplace_dum,
+        `Accessible Dwelling Unit Dummy` = ADUdummy,
+        `Garage Dummy` = garage_dum,
+        `Garage Area (sqft)` = garage_sqft,
+        `Attic Dummy` = attic_dum,
+        `Attic Area (sqft)` = attic_sqft,
+        `Basement Dummy` = bsmt_dum,
+        `Basement Area (sqft)` = bsmt_sqft,
+        `Deck Dummy` = deck_dum,
+        `Deck Area (sqft)` = deck_sqft,
+        
+        `Vacant Properties in 200ft Radius (%)` = percent_vacant,
+        `Vacant Properties in 200ft Radius Dummy` = vacant_dummy,
+        `Canopy Cover (% of lot)` = pct_canopy_cov,
+        `Canopy Cover (sqft)` = total_canopy_cov,
+        `Canopy Cover Dummy` = canopy_dum,
+        `Zoning Change Dummy` = zone_change,
+        `Complete Neighborhoods Score (0-100)` = CN_score,
+        `Distance to Central Business District (ft)` = dist_cityhall,
+        `Distance to Urban Growth Boundary (ft)` = dist_ugb,
+        #`Neighborhood Fixed Effects` = Neighborhood,
+        #`High School Fixed Effects` = HIGH_SCH,
+        #`Elementary School Fixed Effects` = ELEM_SCH,
+        
+        `DEQ Environmental Cleanup Sites (ECSI)` = conECSI,
+        `DEQ Leaking Underground Storage Tank Cleanup Sites (LUST)` = conLUST,
+        `Historic and Conservation Districts` = conHist,
+        `Historic and Conservation Landmarks` = conECSI,
+        `Areas Requiring Archeological Scan or Consultation with Tribes` = conNatAm,
+        `Approach and Departure Cones` = conAirHgt,
+        `Helipad Landing` = conHeliprt,
+        `Airport Noise` = conNoise,
+        `Greenway` = conGW,
+        `DOGAMI Landslide Hazard Area` = conLSHA,
+        `DOGAMI Digital Landslide Database (SLIDO)` = conSLIDO,
+        `Slopes Over 25% Incline)` = conSlp25,
+        `Institutional Campuses` = conInstit,
+        `Private/Common Open Space` = conPrvCom,
+        `Publicly Owned Lots (non-residential)` = conPubOwn,
+        `Sewer System` = conSewer,
+        `Stormwater System` = conStorm,
+        `Water System` = conWater,
+        `Traffic Volume Exceeds Capacity` = conTranCap,
+        `ODOT Highway Interchanges` = conTranInt,
+        `Substandard and Unimproved Streets` = conTranSub,
+        `Scenic Views` = conView,
+        `Conservation Zones` = conCovrly,
+        `Preservation Zones` = conPovrly,
+        `Wetlands` = conWetland,
+        `FEMA 100-Year Floodplain Map` = conFld100,
+        `Percent of Preservation Zones` = pct_conPovrly,
+        `Percent of Conservation Zones` = pct_conCovrly,
+        `Percent of Wetlands` = pct_conWetland,
+        `Percent of FEMA 100_Year Floodplain Map` = pct_conFld100,
+        )
+
+sumstat <- sumdat %>%
+    # Find the mean, st. dev., min, and max for each variable 
+  summarise_all(funs(mean, sd, min, max), na.rm = TRUE) %>%
+  pivot_longer(everything(),
+               names_to = c("key", "variable"), 
+               names_pattern = "(.*)_(.*)") %>%
+  pivot_wider(everything(),
+              names_from = variable,
+              values_from = value)
+
+# fix decimal places
+sumstat[,-1] <- round(sumstat[,-1], 2)
+
+
+
+# Write to .txt
+write.table(sumstat, file = "SFRsumstats.txt", sep = ",", quote = FALSE, row.names = F)
+
+```
+
+
+# Regression 1: Pre-analysis Formula and Functional Forms (Dummies)
+
+model nomenclature
+Y_Z
+Y = specifying feature
+Z = lin or log or bc
+.mod if regression results
+
+
+```{r, echo = TRUE}
+
+# LINEAR REGRESSION-----------------------------------------
+
+# dummies only
+preanalysis_lin = formula(paste0("SALEPRICE ~ 
+                         age_sold + totalsqft + totalsqft_sqd + taxlot_area + 
+                         taxlot_area_sqd + volume + f_baths + h_baths + 
+                         fireplace_dum + ADUdummy +  
+                         garage_dum + attic_dum + bsmt_dum + deck_dum +
+                         vacant_dummy + canopy_dum + zone_change +
+                         CN_score + Neighborhood + HIGH_SCH + 
+                         dist_cityhall + dist_ugb + ", con_names))
+preanalysis_lin.mod <- lm(preanalysis_lin, dat1)
+
+# SEMI-LOG REGRESSION-------------------------------------------
+
+preanalysis_log = formula(paste0("SALEPRICElog ~ 
+                             age_sold + totalsqft + totalsqft_sqd + taxlot_area + 
+                         taxlot_area_sqd + volume + f_baths + h_baths + 
+                         fireplace_dum + ADUdummy +  
+                         garage_dum + attic_dum + bsmt_dum + deck_dum +
+                         vacant_dummy + canopy_dum + zone_change +
+                         CN_score + Neighborhood + HIGH_SCH + 
+                         dist_cityhall + dist_ugb + ", con_names))
+preanalysis_log.mod <- lm(preanalysis_log, dat1)
+
+# BOX-COX (LINEAR) REGRESSION--------------------------------------------
+
+bc = boxcox(preanalysis_lin.mod, lamba = seq(-3, 3, 1))
+best_lam = bc$x[which(bc$y == max(bc$y))]
+dat1 %<>% 
+  mutate(SALEPRICEbc = SALEPRICE^best_lam)
+
+preanalysis_bc = formula(paste0("SALEPRICEbc ~ 
+                                age_sold + totalsqft + totalsqft_sqd + taxlot_area + 
+                         taxlot_area_sqd + volume + f_baths + h_baths + 
+                         fireplace_dum + ADUdummy +  
+                         garage_dum + attic_dum + bsmt_dum + deck_dum +
+                         vacant_dummy + canopy_dum + zone_change +
+                         CN_score + Neighborhood + HIGH_SCH + 
+                         dist_cityhall + dist_ugb + ", con_names))
+preanalysis_bc.mod <- lm(preanalysis_bc, dat1)
+
+```
+
+
+```{r, results = 'hide'}
+preanal.star <- stargazer(
+  preanalysis_lin.mod, preanalysis_log.mod, preanalysis_bc.mod,
+  title = "Regression #1: Pre-analysis Formula and Functional Forms (Dummy)",
+  column.labels = c("Linear", "Semi-Log", "Box-Cox")
+  )
+
+coef(preanalysis_lin.mod)
+```
+
+
+% Table created by stargazer v.5.2.2 by Marek Hlavac, Harvard University. E-mail: hlavac at fas.harvard.edu
+% Date and time: Tue, Apr 21, 2020 - 14:34:12
+\begin{table}[!htbp] \centering 
+  \caption{Regression #1: Pre-analysis Formula and Functional Forms (Dummy)} 
+  \label{} 
+\begin{tabular}{@{\extracolsep{5pt}}lccc} 
+\\[-1.8ex]\hline 
+\hline \\[-1.8ex] 
+ & \multicolumn{3}{c}{\textit{Dependent variable:}} \\ 
+\cline{2-4} 
+\\[-1.8ex] & SALEPRICE & SALEPRICElog & SALEPRICEbc \\ 
+ & Linear & Semi-Log & Box-Cox \\ 
+\\[-1.8ex] & (1) & (2) & (3)\\ 
+\hline \\[-1.8ex] 
+ age\_sold & 653.734$^{***}$ & 0.001$^{***}$ & 0.445$^{***}$ \\ 
+  & (38.935) & (0.0001) & (0.031) \\ 
+  & & & \\ 
+ totalsqft & 30.248$^{***}$ & 0.0001$^{***}$ & 0.038$^{***}$ \\ 
+  & (3.383) & (0.00001) & (0.003) \\ 
+  & & & \\ 
+ totalsqft\_sqd & 0.003$^{***}$ & $-$0.000$^{***}$ & $-$0.00000$^{**}$ \\ 
+  & (0.001) & (0.000) & (0.00000) \\ 
+  & & & \\ 
+ taxlot\_area & 2.664$^{***}$ & 0.00000$^{***}$ & 0.002$^{***}$ \\ 
+  & (0.191) & (0.00000) & (0.0002) \\ 
+  & & & \\ 
+ taxlot\_area\_sqd & $-$0.00001$^{***}$ & $-$0.000$^{***}$ & $-$0.000$^{***}$ \\ 
+  & (0.00000) & (0.000) & (0.000) \\ 
+  & & & \\ 
+ volume & 1.687$^{***}$ & 0.00000$^{***}$ & 0.001$^{***}$ \\ 
+  & (0.074) & (0.00000) & (0.0001) \\ 
+  & & & \\ 
+ f\_baths & 53,936.970$^{***}$ & 0.106$^{***}$ & 39.782$^{***}$ \\ 
+  & (1,224.183) & (0.003) & (0.972) \\ 
+  & & & \\ 
+ h\_baths & 39,314.620$^{***}$ & 0.075$^{***}$ & 28.523$^{***}$ \\ 
+  & (1,569.311) & (0.004) & (1.246) \\ 
+  & & & \\ 
+ fireplace\_dum & 12,695.700$^{***}$ & 0.042$^{***}$ & 12.392$^{***}$ \\ 
+  & (1,760.483) & (0.004) & (1.398) \\ 
+  & & & \\ 
+ ADUdummy & $-$27,713.490$^{***}$ & $-$0.068$^{***}$ & $-$22.507$^{***}$ \\ 
+  & (5,682.289) & (0.015) & (4.511) \\ 
+  & & & \\ 
+ garage\_dum & 17,252.110$^{***}$ & 0.045$^{***}$ & 14.543$^{***}$ \\ 
+  & (1,859.201) & (0.005) & (1.476) \\ 
+  & & & \\ 
+ attic\_dum & $-$2,592.757 & 0.006 & 0.067 \\ 
+  & (1,754.399) & (0.004) & (1.393) \\ 
+  & & & \\ 
+ bsmt\_dum & $-$2,325.762 & 0.021$^{***}$ & 2.819$^{*}$ \\ 
+  & (1,857.950) & (0.005) & (1.475) \\ 
+  & & & \\ 
+ deck\_dum & 2,313.023 & 0.013$^{***}$ & 3.212$^{***}$ \\ 
+  & (1,452.156) & (0.004) & (1.153) \\ 
+  & & & \\ 
+ vacant\_dummy &  &  &  \\ 
+  &  &  &  \\ 
+  & & & \\ 
+ canopy\_dum &  &  &  \\ 
+  &  &  &  \\ 
+  & & & \\ 
+ zone\_change & $-$9,789.175$^{***}$ & $-$0.020$^{***}$ & $-$7.345$^{***}$ \\ 
+  & (1,914.021) & (0.005) & (1.520) \\ 
+  & & & \\ 
+ CN\_score & $-$190.778$^{**}$ & $-$0.001$^{**}$ & $-$0.169$^{**}$ \\ 
+  & (87.269) & (0.0002) & (0.069) \\ 
+  & & & \\ 
+ NeighborhoodArbor Lodge & $-$47,600.730$^{***}$ & $-$0.037 & $-$27.013$^{*}$ \\ 
+  & (17,760.880) & (0.045) & (14.101) \\ 
+  & & & \\ 
+ NeighborhoodArdenwald-Johnson Creek & $-$140,179.900$^{***}$ & $-$0.248$^{***}$ & $-$100.605$^{***}$ \\ 
+  & (21,691.790) & (0.055) & (17.221) \\ 
+  & & & \\ 
+ NeighborhoodArgay Terrace & $-$174,340.700$^{***}$ & $-$0.405$^{***}$ & $-$140.552$^{***}$ \\ 
+  & (18,144.290) & (0.046) & (14.405) \\ 
+  & & & \\ 
+ NeighborhoodArlington Heights & 22,553.650 & $-$0.116 & $-$12.262 \\ 
+  & (28,098.810) & (0.072) & (22.308) \\ 
+  & & & \\ 
+ NeighborhoodArnold Creek & $-$104,764.200$^{***}$ & $-$0.263$^{***}$ & $-$86.018$^{***}$ \\ 
+  & (17,227.000) & (0.044) & (13.677) \\ 
+  & & & \\ 
+ NeighborhoodAshcreek & $-$143,102.000$^{***}$ & $-$0.318$^{***}$ & $-$112.468$^{***}$ \\ 
+  & (16,503.230) & (0.042) & (13.102) \\ 
+  & & & \\ 
+ NeighborhoodBeaumont-Wilshire & $-$8,380.232 & $-$0.017 & $-$6.683 \\ 
+  & (8,787.279) & (0.022) & (6.976) \\ 
+  & & & \\ 
+ NeighborhoodBoise & $-$47,880.910$^{**}$ & 0.011 & $-$17.853 \\ 
+  & (20,904.030) & (0.053) & (16.596) \\ 
+  & & & \\ 
+ NeighborhoodBrentwood-Darlington & $-$156,322.400$^{***}$ & $-$0.356$^{***}$ & $-$125.320$^{***}$ \\ 
+  & (13,259.210) & (0.034) & (10.527) \\ 
+  & & & \\ 
+ NeighborhoodBridlemile & $-$153,897.900$^{***}$ & $-$0.333$^{***}$ & $-$118.067$^{***}$ \\ 
+  & (23,440.300) & (0.060) & (18.610) \\ 
+  & & & \\ 
+ NeighborhoodBrooklyn Action Corps & $-$146,743.100$^{***}$ & $-$0.241$^{***}$ & $-$101.317$^{***}$ \\ 
+  & (14,712.010) & (0.038) & (11.680) \\ 
+  & & & \\ 
+ NeighborhoodBuckman Community Association & $-$57,445.520$^{***}$ & $-$0.064 & $-$33.925$^{***}$ \\ 
+  & (16,316.150) & (0.042) & (12.954) \\ 
+  & & & \\ 
+ NeighborhoodCathedral Park & $-$43,421.790$^{*}$ & $-$0.031 & $-$23.793 \\ 
+  & (22,504.070) & (0.057) & (17.866) \\ 
+  & & & \\ 
+ NeighborhoodCentennial Community Association & $-$138,326.600$^{***}$ & $-$0.428$^{***}$ & $-$129.809$^{***}$ \\ 
+  & (16,570.520) & (0.042) & (13.156) \\ 
+  & & & \\ 
+ NeighborhoodCollins View & $-$132,177.100$^{***}$ & $-$0.297$^{***}$ & $-$104.762$^{***}$ \\ 
+  & (17,632.950) & (0.045) & (13.999) \\ 
+  & & & \\ 
+ NeighborhoodConcordia & $-$40,970.350$^{***}$ & $-$0.067$^{**}$ & $-$28.247$^{***}$ \\ 
+  & (11,433.270) & (0.029) & (9.077) \\ 
+  & & & \\ 
+ NeighborhoodCreston-Kenilworth & $-$123,457.200$^{***}$ & $-$0.217$^{***}$ & $-$87.311$^{***}$ \\ 
+  & (13,289.810) & (0.034) & (10.551) \\ 
+  & & & \\ 
+ NeighborhoodCrestwood & $-$159,518.900$^{***}$ & $-$0.371$^{***}$ & $-$127.812$^{***}$ \\ 
+  & (17,548.910) & (0.045) & (13.932) \\ 
+  & & & \\ 
+ NeighborhoodCully Association of Neighbors & $-$112,172.100$^{***}$ & $-$0.229$^{***}$ & $-$85.300$^{***}$ \\ 
+  & (10,551.740) & (0.027) & (8.377) \\ 
+  & & & \\ 
+ NeighborhoodEast Columbia & $-$175,113.600$^{***}$ & $-$0.452$^{***}$ & $-$145.984$^{***}$ \\ 
+  & (21,991.250) & (0.056) & (17.459) \\ 
+  & & & \\ 
+ NeighborhoodEastmoreland & 69,626.450$^{***}$ & 0.110$^{***}$ & 46.936$^{***}$ \\ 
+  & (14,180.990) & (0.036) & (11.258) \\ 
+  & & & \\ 
+ NeighborhoodEliot & $-$130,567.800$^{***}$ & $-$0.132 & $-$75.968$^{***}$ \\ 
+  & (33,231.980) & (0.085) & (26.383) \\ 
+  & & & \\ 
+ NeighborhoodFar Southwest & $-$123,337.400$^{***}$ & $-$0.275$^{***}$ & $-$96.839$^{***}$ \\ 
+  & (18,291.630) & (0.047) & (14.522) \\ 
+  & & & \\ 
+ NeighborhoodForest Park & $-$51,702.710$^{**}$ & $-$0.218$^{***}$ & $-$57.084$^{***}$ \\ 
+  & (26,268.140) & (0.067) & (20.855) \\ 
+  & & & \\ 
+ NeighborhoodFoster-Powell & $-$128,735.300$^{***}$ & $-$0.243$^{***}$ & $-$94.911$^{***}$ \\ 
+  & (13,218.360) & (0.034) & (10.494) \\ 
+  & & & \\ 
+ NeighborhoodGlenfair & $-$165,451.200$^{***}$ & $-$0.438$^{***}$ & $-$143.200$^{***}$ \\ 
+  & (21,933.890) & (0.056) & (17.414) \\ 
+  & & & \\ 
+ NeighborhoodGoose Hollow Foothills League & $-$65,544.650$^{**}$ & $-$0.260$^{***}$ & $-$72.376$^{***}$ \\ 
+  & (32,235.040) & (0.082) & (25.592) \\ 
+  & & & \\ 
+ NeighborhoodGrant Park & 33,950.400$^{***}$ & 0.059$^{**}$ & 23.127$^{***}$ \\ 
+  & (10,176.360) & (0.026) & (8.079) \\ 
+  & & & \\ 
+ NeighborhoodHayden Island Neighborhood Network & 31,945.660 & 0.086 & 29.032 \\ 
+  & (32,756.720) & (0.084) & (26.006) \\ 
+  & & & \\ 
+ NeighborhoodHayhurst & $-$146,573.000$^{***}$ & $-$0.323$^{***}$ & $-$114.673$^{***}$ \\ 
+  & (16,538.880) & (0.042) & (13.130) \\ 
+  & & & \\ 
+ NeighborhoodHazelwood & $-$153,042.100$^{***}$ & $-$0.396$^{***}$ & $-$130.099$^{***}$ \\ 
+  & (13,858.050) & (0.035) & (11.002) \\ 
+  & & & \\ 
+ NeighborhoodHealy Heights & 20,892.500 & $-$0.156 & $-$21.415 \\ 
+  & (38,719.620) & (0.099) & (30.740) \\ 
+  & & & \\ 
+ NeighborhoodHillsdale & $-$121,750.500$^{***}$ & $-$0.301$^{***}$ & $-$100.802$^{***}$ \\ 
+  & (16,695.620) & (0.043) & (13.255) \\ 
+  & & & \\ 
+ NeighborhoodHillside & $-$7,398.963 & $-$0.193$^{***}$ & $-$38.031$^{*}$ \\ 
+  & (26,140.520) & (0.067) & (20.753) \\ 
+  & & & \\ 
+ NeighborhoodHollywood & 17,514.410 & 0.053 & 16.231 \\ 
+  & (23,332.760) & (0.060) & (18.524) \\ 
+  & & & \\ 
+ NeighborhoodHomestead & $-$173,755.700$^{***}$ & $-$0.382$^{***}$ & $-$134.531$^{***}$ \\ 
+  & (30,211.290) & (0.077) & (23.985) \\ 
+  & & & \\ 
+ NeighborhoodHosford-Abernethy Neighborhood District Assn. & $-$36,142.270$^{***}$ & $-$0.053 & $-$23.847$^{**}$ \\ 
+  & (13,581.100) & (0.035) & (10.782) \\ 
+  & & & \\ 
+ NeighborhoodHumboldt & $-$50,691.210$^{***}$ & $-$0.049 & $-$29.115$^{**}$ \\ 
+  & (16,846.420) & (0.043) & (13.375) \\ 
+  & & & \\ 
+ NeighborhoodIrvington Community Association & 13,950.070 & $-$0.015 & 1.815 \\ 
+  & (10,652.400) & (0.027) & (8.457) \\ 
+  & & & \\ 
+ NeighborhoodKenton & $-$79,098.330$^{***}$ & $-$0.114$^{**}$ & $-$52.708$^{***}$ \\ 
+  & (20,013.690) & (0.051) & (15.889) \\ 
+  & & & \\ 
+ NeighborhoodKerns & $-$43,784.180$^{**}$ & $-$0.040 & $-$24.200 \\ 
+  & (19,127.970) & (0.049) & (15.186) \\ 
+  & & & \\ 
+ NeighborhoodKing & $-$96,820.400$^{***}$ & $-$0.137$^{***}$ & $-$62.362$^{***}$ \\ 
+  & (12,657.170) & (0.032) & (10.049) \\ 
+  & & & \\ 
+ NeighborhoodLaurelhurst & 29,897.420$^{***}$ & 0.049$^{**}$ & 20.171$^{***}$ \\ 
+  & (9,085.603) & (0.023) & (7.213) \\ 
+  & & & \\ 
+ NeighborhoodLents & $-$156,632.700$^{***}$ & $-$0.398$^{***}$ & $-$132.126$^{***}$ \\ 
+  & (12,961.590) & (0.033) & (10.290) \\ 
+  & & & \\ 
+ NeighborhoodLinnton & $-$171,751.500$^{***}$ & $-$0.344$^{***}$ & $-$127.632$^{***}$ \\ 
+  & (28,491.000) & (0.073) & (22.619) \\ 
+  & & & \\ 
+ NeighborhoodMadison South & $-$120,775.300$^{***}$ & $-$0.275$^{***}$ & $-$96.793$^{***}$ \\ 
+  & (11,324.610) & (0.029) & (8.991) \\ 
+  & & & \\ 
+ NeighborhoodMaplewood & $-$130,336.900$^{***}$ & $-$0.279$^{***}$ & $-$100.629$^{***}$ \\ 
+  & (17,533.920) & (0.045) & (13.920) \\ 
+  & & & \\ 
+ NeighborhoodMarkham & $-$174,085.500$^{***}$ & $-$0.392$^{***}$ & $-$137.982$^{***}$ \\ 
+  & (17,076.210) & (0.044) & (13.557) \\ 
+  & & & \\ 
+ NeighborhoodMarshall Park & $-$120,482.200$^{***}$ & $-$0.268$^{***}$ & $-$94.593$^{***}$ \\ 
+  & (18,636.570) & (0.048) & (14.796) \\ 
+  & & & \\ 
+ NeighborhoodMC Unclaimed \#13 & $-$127,495.700 & $-$0.285 & $-$101.579 \\ 
+  & (90,580.040) & (0.231) & (71.913) \\ 
+  & & & \\ 
+ NeighborhoodMill Park & $-$159,454.800$^{***}$ & $-$0.424$^{***}$ & $-$137.462$^{***}$ \\ 
+  & (14,487.210) & (0.037) & (11.502) \\ 
+  & & & \\ 
+ NeighborhoodMontavilla & $-$93,797.570$^{***}$ & $-$0.191$^{***}$ & $-$70.901$^{***}$ \\ 
+  & (10,748.300) & (0.027) & (8.533) \\ 
+  & & & \\ 
+ NeighborhoodMt. Scott-Arleta & $-$113,371.000$^{***}$ & $-$0.213$^{***}$ & $-$83.514$^{***}$ \\ 
+  & (13,447.220) & (0.034) & (10.676) \\ 
+  & & & \\ 
+ NeighborhoodMt. Tabor & $-$8,819.454 & 0.003 & $-$2.718 \\ 
+  & (11,766.770) & (0.030) & (9.342) \\ 
+  & & & \\ 
+ NeighborhoodMultnomah & $-$128,589.300$^{***}$ & $-$0.283$^{***}$ & $-$100.720$^{***}$ \\ 
+  & (16,563.350) & (0.042) & (13.150) \\ 
+  & & & \\ 
+ NeighborhoodNorth Tabor & $-$87,049.210$^{***}$ & $-$0.155$^{***}$ & $-$61.556$^{***}$ \\ 
+  & (12,329.570) & (0.031) & (9.789) \\ 
+  & & & \\ 
+ NeighborhoodNorthwest District Association & 94,786.710$^{***}$ & $-$0.020 & 32.812 \\ 
+  & (27,363.510) & (0.070) & (21.724) \\ 
+  & & & \\ 
+ NeighborhoodNorthwest Heights & $-$20,737.850 & $-$0.137$^{**}$ & $-$30.273 \\ 
+  & (24,045.590) & (0.061) & (19.090) \\ 
+  & & & \\ 
+ NeighborhoodOverlook & $-$23,225.240 & 0.006 & $-$8.914 \\ 
+  & (18,344.300) & (0.047) & (14.564) \\ 
+  & & & \\ 
+ NeighborhoodParkrose & $-$170,191.100$^{***}$ & $-$0.445$^{***}$ & $-$146.536$^{***}$ \\ 
+  & (18,249.270) & (0.047) & (14.488) \\ 
+  & & & \\ 
+ NeighborhoodParkrose Heights Association of Neighbors & $-$168,347.000$^{***}$ & $-$0.436$^{***}$ & $-$143.755$^{***}$ \\ 
+  & (17,515.310) & (0.045) & (13.906) \\ 
+  & & & \\ 
+ NeighborhoodPiedmont & $-$60,453.010$^{***}$ & $-$0.074$^{*}$ & $-$38.252$^{***}$ \\ 
+  & (17,455.130) & (0.045) & (13.858) \\ 
+  & & & \\ 
+ NeighborhoodPleasant Valley & $-$133,867.100$^{***}$ & $-$0.301$^{***}$ & $-$105.699$^{***}$ \\ 
+  & (15,687.210) & (0.040) & (12.454) \\ 
+  & & & \\ 
+ NeighborhoodPortsmouth & $-$68,402.200$^{***}$ & $-$0.086 & $-$43.735$^{***}$ \\ 
+  & (20,945.260) & (0.053) & (16.629) \\ 
+  & & & \\ 
+ NeighborhoodPowellhurst-Gilbert & $-$149,624.100$^{***}$ & $-$0.418$^{***}$ & $-$132.036$^{***}$ \\ 
+  & (14,752.610) & (0.038) & (11.712) \\ 
+  & & & \\ 
+ NeighborhoodReed & $-$82,083.140$^{***}$ & $-$0.107$^{***}$ & $-$51.898$^{***}$ \\ 
+  & (15,478.190) & (0.040) & (12.288) \\ 
+  & & & \\ 
+ NeighborhoodRichmond & $-$43,633.180$^{***}$ & $-$0.048 & $-$25.514$^{***}$ \\ 
+  & (12,257.190) & (0.031) & (9.731) \\ 
+  & & & \\ 
+ NeighborhoodRose City Park & $-$48,235.420$^{***}$ & $-$0.051$^{**}$ & $-$27.927$^{***}$ \\ 
+  & (8,392.427) & (0.021) & (6.663) \\ 
+  & & & \\ 
+ NeighborhoodRoseway & $-$75,394.250$^{***}$ & $-$0.129$^{***}$ & $-$52.980$^{***}$ \\ 
+  & (10,639.320) & (0.027) & (8.447) \\ 
+  & & & \\ 
+ NeighborhoodRussell & $-$156,939.000$^{***}$ & $-$0.391$^{***}$ & $-$131.443$^{***}$ \\ 
+  & (17,992.480) & (0.046) & (14.284) \\ 
+  & & & \\ 
+ NeighborhoodSabin Community Association & $-$43,744.450$^{***}$ & $-$0.056$^{**}$ & $-$27.320$^{***}$ \\ 
+  & (9,050.608) & (0.023) & (7.185) \\ 
+  & & & \\ 
+ NeighborhoodSellwood-Moreland Improvement League & $-$42,446.820$^{***}$ & $-$0.040 & $-$23.999$^{**}$ \\ 
+  & (13,061.780) & (0.033) & (10.370) \\ 
+  & & & \\ 
+ NeighborhoodSouth Burlingame & $-$150,735.800$^{***}$ & $-$0.337$^{***}$ & $-$119.044$^{***}$ \\ 
+  & (17,997.010) & (0.046) & (14.288) \\ 
+  & & & \\ 
+ NeighborhoodSouth Portland & $-$60,916.650$^{***}$ & $-$0.169$^{***}$ & $-$53.934$^{***}$ \\ 
+  & (19,224.550) & (0.049) & (15.263) \\ 
+  & & & \\ 
+ NeighborhoodSouth Tabor & $-$87,266.110$^{***}$ & $-$0.125$^{***}$ & $-$57.683$^{***}$ \\ 
+  & (13,081.900) & (0.033) & (10.386) \\ 
+  & & & \\ 
+ NeighborhoodSouthwest Hills Residential League & $-$27,030.220 & $-$0.203$^{***}$ & $-$47.225$^{**}$ \\ 
+  & (23,365.120) & (0.060) & (18.550) \\ 
+  & & & \\ 
+ NeighborhoodSt. Johns & $-$61,292.130$^{***}$ & $-$0.101$^{*}$ & $-$43.290$^{***}$ \\ 
+  & (21,083.220) & (0.054) & (16.738) \\ 
+  & & & \\ 
+ NeighborhoodSullivans Gulch & $-$108,832.300$^{***}$ & $-$0.156$^{***}$ & $-$70.495$^{***}$ \\ 
+  & (21,040.010) & (0.054) & (16.704) \\ 
+  & & & \\ 
+ NeighborhoodSumner Association of Neighbors & $-$165,848.000$^{***}$ & $-$0.447$^{***}$ & $-$144.336$^{***}$ \\ 
+  & (18,581.230) & (0.047) & (14.752) \\ 
+  & & & \\ 
+ NeighborhoodSunderland Association of Neighbors & $-$179,558.200$^{***}$ & $-$0.591$^{***}$ & $-$174.465$^{***}$ \\ 
+  & (51,741.430) & (0.132) & (41.078) \\ 
+  & & & \\ 
+ NeighborhoodSunnyside & $-$31,354.940$^{**}$ & $-$0.007 & $-$13.647 \\ 
+  & (13,193.800) & (0.034) & (10.475) \\ 
+  & & & \\ 
+ NeighborhoodSylvan-Highlands & $-$136,624.900$^{***}$ & $-$0.320$^{***}$ & $-$108.739$^{***}$ \\ 
+  & (26,185.350) & (0.067) & (20.789) \\ 
+  & & & \\ 
+ NeighborhoodUniversity Park & $-$49,860.560$^{**}$ & $-$0.030 & $-$26.268 \\ 
+  & (21,257.180) & (0.054) & (16.876) \\ 
+  & & & \\ 
+ NeighborhoodVernon & $-$15,327.840 & $-$0.005 & $-$7.170 \\ 
+  & (14,688.850) & (0.037) & (11.662) \\ 
+  & & & \\ 
+ NeighborhoodWest Portland Park & $-$154,213.500$^{***}$ & $-$0.348$^{***}$ & $-$122.840$^{***}$ \\ 
+  & (16,983.830) & (0.043) & (13.484) \\ 
+  & & & \\ 
+ NeighborhoodWilkes Community Group & $-$154,880.400$^{***}$ & $-$0.380$^{***}$ & $-$128.464$^{***}$ \\ 
+  & (19,113.190) & (0.049) & (15.174) \\ 
+  & & & \\ 
+ NeighborhoodWoodland Park & $-$170,056.300$^{***}$ & $-$0.460$^{***}$ & $-$149.394$^{***}$ \\ 
+  & (26,285.210) & (0.067) & (20.868) \\ 
+  & & & \\ 
+ NeighborhoodWoodlawn & $-$66,551.130$^{***}$ & $-$0.081$^{**}$ & $-$41.961$^{***}$ \\ 
+  & (16,090.000) & (0.041) & (12.774) \\ 
+  & & & \\ 
+ NeighborhoodWoodstock & $-$89,288.490$^{***}$ & $-$0.127$^{***}$ & $-$58.740$^{***}$ \\ 
+  & (13,857.900) & (0.035) & (11.002) \\ 
+  & & & \\ 
+ HIGH\_SCHCLEVELAND HS & $-$18,734.900 & $-$0.096$^{***}$ & $-$23.809$^{**}$ \\ 
+  & (12,664.840) & (0.032) & (10.055) \\ 
+  & & & \\ 
+ HIGH\_SCHDAVID DOUGLAS HS & $-$27,562.900$^{***}$ & $-$0.085$^{***}$ & $-$26.232$^{***}$ \\ 
+  & (8,513.177) & (0.022) & (6.759) \\ 
+  & & & \\ 
+ HIGH\_SCHFRANKLIN HS & $-$21,821.660$^{*}$ & $-$0.097$^{***}$ & $-$25.422$^{***}$ \\ 
+  & (11,656.860) & (0.030) & (9.255) \\ 
+  & & & \\ 
+ HIGH\_SCHGRANT HS & 12,508.920 & $-$0.058$^{*}$ & $-$4.752 \\ 
+  & (13,845.530) & (0.035) & (10.992) \\ 
+  & & & \\ 
+ HIGH\_SCHGRANT-JEFF & $-$38,675.120$^{**}$ & $-$0.178$^{***}$ & $-$45.098$^{***}$ \\ 
+  & (18,490.100) & (0.047) & (14.680) \\ 
+  & & & \\ 
+ HIGH\_SCHLINCOLN HS & 59,058.440$^{***}$ & 0.068 & 34.315$^{***}$ \\ 
+  & (16,642.740) & (0.042) & (13.213) \\ 
+  & & & \\ 
+ HIGH\_SCHMADISON HS & $-$62,973.450$^{***}$ & $-$0.196$^{***}$ & $-$58.987$^{***}$ \\ 
+  & (12,577.010) & (0.032) & (9.985) \\ 
+  & & & \\ 
+ HIGH\_SCHMADISON-JEFF & $-$70,007.850$^{***}$ & $-$0.185$^{***}$ & $-$59.605$^{***}$ \\ 
+  & (15,175.780) & (0.039) & (12.048) \\ 
+  & & & \\ 
+ HIGH\_SCHPARKROSE HS & $-$19,285.550 & $-$0.069$^{**}$ & $-$19.358$^{**}$ \\ 
+  & (12,412.220) & (0.032) & (9.854) \\ 
+  & & & \\ 
+ HIGH\_SCHREYNOLDS HS & $-$6,420.562 & $-$0.035 & $-$8.507 \\ 
+  & (12,257.460) & (0.031) & (9.731) \\ 
+  & & & \\ 
+ HIGH\_SCHRIVERDALE HS & 404,790.900$^{***}$ & 0.459$^{***}$ & 234.252$^{***}$ \\ 
+  & (69,547.380) & (0.178) & (55.214) \\ 
+  & & & \\ 
+ HIGH\_SCHROOS-JEFF & $-$85,588.740$^{***}$ & $-$0.258$^{***}$ & $-$77.364$^{***}$ \\ 
+  & (19,852.280) & (0.051) & (15.761) \\ 
+  & & & \\ 
+ HIGH\_SCHROOSEVELT CAMPUS & $-$72,855.190$^{***}$ & $-$0.246$^{***}$ & $-$70.995$^{***}$ \\ 
+  & (22,693.980) & (0.058) & (18.017) \\ 
+  & & & \\ 
+ HIGH\_SCHSUNSET HS & 39,380.500 & 0.032 & 19.832 \\ 
+  & (34,001.210) & (0.087) & (26.994) \\ 
+  & & & \\ 
+ HIGH\_SCHWILSON HS &  &  &  \\ 
+  &  &  &  \\ 
+  & & & \\ 
+ dist\_cityhall & $-$5.519$^{***}$ & $-$0.00001$^{***}$ & $-$0.004$^{***}$ \\ 
+  & (0.361) & (0.00000) & (0.0003) \\ 
+  & & & \\ 
+ dist\_ugb & $-$1.107$^{**}$ & $-$0.00000$^{***}$ & $-$0.001$^{***}$ \\ 
+  & (0.438) & (0.00000) & (0.0003) \\ 
+  & & & \\ 
+ conECSI & 86,987.080 & 0.224 & 73.815 \\ 
+  & (68,930.030) & (0.176) & (54.724) \\ 
+  & & & \\ 
+ conLUST & $-$11,725.250 & 0.044 & 5.183 \\ 
+  & (69,955.750) & (0.179) & (55.539) \\ 
+  & & & \\ 
+ conHist & 37,215.660$^{***}$ & 0.057$^{***}$ & 24.790$^{***}$ \\ 
+  & (5,652.139) & (0.014) & (4.487) \\ 
+  & & & \\ 
+ conHistLdm & 5,595.870 & $-$0.018 & $-$1.647 \\ 
+  & (26,431.160) & (0.067) & (20.984) \\ 
+  & & & \\ 
+ conNatAm &  &  &  \\ 
+  &  &  &  \\ 
+  & & & \\ 
+ conAirHgt & 13,900.800$^{***}$ & 0.028$^{***}$ & 10.508$^{***}$ \\ 
+  & (3,580.575) & (0.009) & (2.843) \\ 
+  & & & \\ 
+ conHeliprt &  &  &  \\ 
+  &  &  &  \\ 
+  & & & \\ 
+ conNoise & $-$5,143.771 & $-$0.003 & $-$3.263 \\ 
+  & (8,317.255) & (0.021) & (6.603) \\ 
+  & & & \\ 
+ conGW & $-$60,344.670 & $-$0.022 & $-$29.655 \\ 
+  & (70,364.930) & (0.180) & (55.864) \\ 
+  & & & \\ 
+ conLSHA & 7,413.131$^{**}$ & 0.023$^{**}$ & 6.945$^{**}$ \\ 
+  & (3,781.152) & (0.010) & (3.002) \\ 
+  & & & \\ 
+ conSLIDO & $-$20,783.800$^{***}$ & $-$0.031$^{**}$ & $-$13.044$^{***}$ \\ 
+  & (5,817.719) & (0.015) & (4.619) \\ 
+  & & & \\ 
+ conSlp25 & 5,082.771 & $-$0.003 & 1.538 \\ 
+  & (3,944.311) & (0.010) & (3.131) \\ 
+  & & & \\ 
+ conInstit &  &  &  \\ 
+  &  &  &  \\ 
+  & & & \\ 
+ conPrvCom &  &  &  \\ 
+  &  &  &  \\ 
+  & & & \\ 
+ conPubOwn & $-$2,053.525 & $-$0.101 & $-$15.696 \\ 
+  & (28,161.270) & (0.072) & (22.358) \\ 
+  & & & \\ 
+ conSewer & 3,097.729 & 0.012 & 4.012 \\ 
+  & (12,719.090) & (0.032) & (10.098) \\ 
+  & & & \\ 
+ conStorm & $-$3,568.109 & $-$0.002 & $-$1.561 \\ 
+  & (2,950.685) & (0.008) & (2.343) \\ 
+  & & & \\ 
+ conTranCap & $-$5,308.373$^{*}$ & $-$0.011 & $-$4.258$^{*}$ \\ 
+  & (2,984.319) & (0.008) & (2.369) \\ 
+  & & & \\ 
+ conTranInt & $-$5,516.491$^{*}$ & $-$0.014$^{*}$ & $-$4.979$^{**}$ \\ 
+  & (3,125.102) & (0.008) & (2.481) \\ 
+  & & & \\ 
+ conTranSub & $-$9,268.669$^{***}$ & $-$0.022$^{***}$ & $-$7.355$^{***}$ \\ 
+  & (1,871.464) & (0.005) & (1.486) \\ 
+  & & & \\ 
+ conWater & $-$4,101.496 & $-$0.021$^{**}$ & $-$5.456$^{*}$ \\ 
+  & (3,644.157) & (0.009) & (2.893) \\ 
+  & & & \\ 
+ conView &  &  &  \\ 
+  &  &  &  \\ 
+  & & & \\ 
+ conCovrly & $-$5,689.137 & $-$0.001 & $-$2.425 \\ 
+  & (4,372.360) & (0.011) & (3.471) \\ 
+  & & & \\ 
+ conPovrly & $-$28,660.120$^{***}$ & $-$0.035$^{**}$ & $-$17.132$^{***}$ \\ 
+  & (6,104.169) & (0.016) & (4.846) \\ 
+  & & & \\ 
+ conWetland & $-$55,016.280$^{**}$ & $-$0.016 & $-$24.819 \\ 
+  & (25,219.400) & (0.064) & (20.022) \\ 
+  & & & \\ 
+ conFld100 & $-$9,090.981 & $-$0.001 & $-$4.215 \\ 
+  & (10,707.150) & (0.027) & (8.501) \\ 
+  & & & \\ 
+ pct\_conFld100 & 4,723.455 & $-$0.048 & $-$4.556 \\ 
+  & (14,823.740) & (0.038) & (11.769) \\ 
+  & & & \\ 
+ pct\_conPovrly & $-$23,425.630 & $-$0.078 & $-$22.723 \\ 
+  & (98,534.140) & (0.251) & (78.227) \\ 
+  & & & \\ 
+ pct\_conCovrly & 32,199.880$^{***}$ & 0.088$^{***}$ & 28.266$^{***}$ \\ 
+  & (8,614.605) & (0.022) & (6.839) \\ 
+  & & & \\ 
+ pct\_conWetland &  &  &  \\ 
+  &  &  &  \\ 
+  & & & \\ 
+ pct\_canopy\_cov & $-$10,792.440$^{***}$ & $-$0.021$^{*}$ & $-$7.405$^{**}$ \\ 
+  & (4,166.258) & (0.011) & (3.308) \\ 
+  & & & \\ 
+ Constant & 443,751.000$^{***}$ & 12.931$^{***}$ & 697.361$^{***}$ \\ 
+  & (21,532.270) & (0.055) & (17.095) \\ 
+  & & & \\ 
+\hline \\[-1.8ex] 
+Observations & 21,828 & 21,828 & 21,828 \\ 
+R$^{2}$ & 0.744 & 0.665 & 0.730 \\ 
+Adjusted R$^{2}$ & 0.742 & 0.662 & 0.728 \\ 
+Residual Std. Error (df = 21681) & 97,330.350 & 0.248 & 77.272 \\ 
+F Statistic (df = 146; 21681) & 431.974$^{***}$ & 294.160$^{***}$ & 401.289$^{***}$ \\ 
+\hline 
+\hline \\[-1.8ex] 
+\textit{Note:}  & \multicolumn{3}{r}{$^{*}$p$<$0.1; $^{**}$p$<$0.05; $^{***}$p$<$0.01} \\ 
+\end{tabular} 
+\end{table} 
+
+
