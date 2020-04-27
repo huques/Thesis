@@ -1,6 +1,8 @@
 ---
 title: "Construct Full Data Frame 2"
-output: pdf_document
+output:
+  html_document:
+    df_print: paged
 ---
 
 ### 1. Load packages
@@ -286,7 +288,7 @@ vacant_var <- vacant_join_buffy %>%
   dplyr::summarize(percent_vacant = sum(VACANT)/n[1]) 
 
 # join to dataframe 
-fugly <- left_join(fugly, vacant_var, by = "STATE_ID")
+fugly <- left_join(fugly, vacant_var, by = c("STATE_ID" = "STATE_ID.x"))
 rm(vacant_var, vacant_join_buffy)
 
 print(paste0("vacant Join: ", as.character(sum(data.frame(table(fugly$STATE_ID.x))$Freq > 1))))
@@ -634,7 +636,7 @@ ADU <- ADU[-c(1),]
 # join to dataframe 
 fugly <- left_join(fugly, ADU, by = "PROPERTYID")
 print(paste0("ADU Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$Freq > 1))))
-rm(ADU)
+# rm(ADU)
 ```
 
 
@@ -773,23 +775,23 @@ rm(partial)
 ```{r}
 # Load zoning shape files
 zoningaug2014 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2014_Aug_pdx.shp"))
+                              "Zoning_2014_Aug_pdx.shp")) %>% st_transform(2913)
 zoningfeb2014 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2014_Feb_pdx.shp"))
+                              "Zoning_2014_Feb_pdx.shp")) %>% st_transform(2913)
 zoningaug2015 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2015_Aug_pdx.shp"))
+                              "Zoning_2015_Aug_pdx.shp")) %>% st_transform(2913)
 zoningfeb2015 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2015_Feb_pdx.shp"))
+                              "Zoning_2015_Feb_pdx.shp")) %>% st_transform(2913)
 zoningaug2016 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2016_Aug_pdx.shp"))
+                              "Zoning_2016_Aug_pdx.shp")) %>% st_transform(2913)
 zoningfeb2016 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2015_Feb_pdx.shp"))
+                              "Zoning_2015_Feb_pdx.shp")) %>% st_transform(2913)
 zoningaug2017 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2017_Aug_metro.shp"))
+                              "Zoning_2017_Aug_metro.shp")) %>% st_transform(2913)
 zoningaug2018 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2018_Aug_pdx.shp"))
+                              "Zoning_2018_Aug_pdx.shp")) %>% st_transform(2913)
 zoningfeb2018 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2018_Feb_pdx.shp"))
+                              "Zoning_2018_Feb_pdx.shp")) %>% st_transform(2913)
 
 zonelist <- list(zoningaug2014 = zoningaug2014,
                  zoningaug2015 = zoningaug2015,
