@@ -52,7 +52,7 @@ vacant_var <- vacant_join_buffy %>%
   arrange(STATE_ID.x) %>%
   group_by(STATE_ID.x) %>%
   mutate(n = n()) %>%
-  mutate(VACANT = VACANT*1) %>%
+  mutate(VACANT = VACANT) %>%
   filter(!is.na(VACANT)) %>% # taking out na's when calcing percent vacant
   summarize(percent_vacant = sum(VACANT)/n[1])
 
