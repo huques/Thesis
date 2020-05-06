@@ -135,7 +135,7 @@ test1 %<>%
          taxlot_area_sqd = taxlot_area*taxlot_area)
 
 #-------------------------------------------------------------------------
-
+table(is.na(test1$conView))
 # Clean SFR dataframe: 
 # remove based on filtering parameters, set NAs as zero, add in improvements
 test2 <- test1 %>%
@@ -161,14 +161,14 @@ test2 <- test1 %>%
          trust_flag == FALSE) 
 
 
-mary <- dat1 %>% 
-  filter(percent_vacant > 99) 
-         proud_flag == FALSE, 
-         llc_flag == FALSE,
-         trust_flag == FALSE)
-brady <- 25266 - nrow(dat1)
-brady
-brady/25266
+# mary <- dat1 %>% 
+#   filter(percent_vacant > 99) 
+#          proud_flag == FALSE, 
+#          llc_flag == FALSE,
+#          trust_flag == FALSE)
+# brady <- 25266 - nrow(dat1)
+# brady
+# brady/25266
 
 mean(mary$SALEPRICE)
 median(mary$SALEPRICE)
@@ -731,7 +731,7 @@ stargazer(
   header = FALSE)
 
 summary(final_log.mod)
-
+plot(final_log.mod)
 
 dat1 %>%
   filter(conGW == 1)
@@ -764,6 +764,75 @@ final_log_vif.mod <- lm(final_log_vif, dat1)
 
 summary( final_log_vif.mod )
 car::vif(final_log_vif.mod, singular.ok = T) 
-car::vif(final_log.mod)
+
+
+cons_table <- dat1 %>%
+  dplyr::select(conECSI, conLUST, 
+                conHist, conHistLdm, conNatAm,
+                conCovrly, conPovrly,
+                conAirHgt, conHeliprt, conNoise,
+                conGW,
+                conLSHA, conSLIDO, conFld100, conSlp25, 
+                conSewer, conStorm, conWater,
+                conWetland,
+                conInstit, conPrvCom, conPubOwn,
+                conView,
+                conTranCap, conTranInt, conTranSub) %>%
+  pivot_longer(cols = starts_with("con"),
+               names_to = "Constraint",
+               values_to = "Value") %>%
+  group_by(Constraint, Value) %>%
+  summarize(Count = n()) %>%
+  pivot_wider(names_from = Value,
+              values_from = Count) %>%
+  rename(Yes = `1`,
+         No = `0`) %>%
+  mutate(Percent_Yes = (Yes/No)*100)
+
+
+
+stargazer(
+  final_log.mod, final_log.mod, final_log.mod, 
+  type = "html",
+  title = "Single-Family Residential Constraint Counts",
+  style = "io",
+  out = "cons_table_sfr.htm",
+  column.labels = c("Tax Lots Unconstrained", "Tax Lots Constrained", "Percent Constrained"),
+  covariate.labels = c(
+        "DEQ Environmental Cleanup Sites (ECSI)",
+        "DEQ Leaking Underground Storage Tank Cleanup Sites (LUST)",
+        "Historic and Conservation Districts",
+        "Historic and Conservation Landmarks",
+        "Areas Requiring Archeological Scan or Consultation with Tribes",
+        "Conservation Zones",
+        "Preservation Zones",
+        "Approach and Departure Cones",
+        "Helipad Landing",
+        "Airport Noise",
+        "Greenway",
+        "DOGAMI Landslide Hazard Area",
+        "DOGAMI Digital Landslide Database (SLIDO)",
+        "FEMA 100-Year Floodplain Map",
+        "Slopes Over 25% Incline",
+        "Sewer System",
+        "Stormwater System",
+        "Water System",
+        "Wetlands",
+        "Institutional Campuses",
+        "Private/Common Open Space",
+        "Publicly Owned Lots",
+        "Scenic Views",
+        "Traffic Volume Exceeds Capacity",
+        "ODOT Highway Interchanges",
+        "Substandard and Unimproved Streets"),
+  initial.zero = TRUE,
+  notes.align = "l",
+  single.row = TRUE,
+  keep.stat = c("n", "rsq"),
+  no.space = TRUE,
+  colnames = FALSE,
+  digits.extra = 3,
+  intercept.bottom = FALSE,
+  header = FALSE)
 
 ```

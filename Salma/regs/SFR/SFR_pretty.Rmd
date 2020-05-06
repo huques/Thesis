@@ -588,11 +588,10 @@ MAPPING
 
 ```{r}
 
-
 bli_constraints %>%
-  filter(!is.na(conSewer)) %>%
-  mapview(zcol = c("conSewer"), 
-        layer.name = c("Natheli"))
+  filter(!is.na(conTranSub)) %>%
+  mapview(zcol = c("conTranSub"), 
+        layer.name = c("Substandard and Unimproved Streets"))
 
 ```
 

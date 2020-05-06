@@ -148,7 +148,7 @@ MUtest1 %<>%
 # remove based on filtering parameters, set NAs as zero, add in improvements
 MUtest2 <- MUtest1 %>%
   dplyr::select(-c(matches("zone"))) %>%
-  mutate_at(vars(MUclean_names), to0) %>%
+  mutate_at(vars(clean_names), to0) %>%
   mutate(arms_length100 = case_when(price_ratio > 100 ~ TRUE,
                                  TRUE ~ FALSE),
          arms_length20 = case_when(price_ratio > 20 ~ TRUE,
@@ -211,8 +211,8 @@ MUtest2 <- MUtest1 %>%
 #==============================================
 ### Looking at NA's systematically 
 
-mary <- MUtest2 %>% 
-  filter(totalsqft == 164)
+mary <- MUtest1 %>% 
+  filter(vacant_dummy == TRUE)
 brady <- 2008 - nrow(mary)
 brady
 brady/2008
@@ -636,16 +636,6 @@ summary(MUpreanalysis2_log.mod)
 # OUTPUT FILES IN HTML
 
 ```{r}
-MUdat100 <- MUdat1 %>% # removed 78 obs
-  filter(arms_length100 == TRUE)
-MUbase100_log = formula(paste0("SALEPRICElog ~ 
-                             age_sold + totalsqft_sqd + taxlot_area_sqd + 
-                         FLOORS + maxheight + bldguse + 
-                         f_baths + h_baths + 
-                         percent_vacant + sale_z_new + 
-                         CN_score + dist_cityhall + dist_ugb + ", con_names))
-MUbase100_log.mod <- lm(MUbase100_log, MUdat100)
-summary(MUbase100_log.mod)
 
 MUdat20 <- MUdat1 %>% # removed 78 obs
   filter(arms_length20 == TRUE)
@@ -661,12 +651,12 @@ summary(MUbase20_log.mod)
 
 ### Regression 7: Mega Sexy Final Model
 stargazer(
-  MUbase20_log.mod, MUbase20_log.mod,
+  MUbase20_log.mod, 
   type = "html",
   title = "Mixed-use Residential Results",
   style = "io",
-  out = "MUmodels_finals.htm",
-  column.labels = c("Log Sale Price <br> (standard error)", "Marginal Price (%)"),
+  out = "MUmodels_finalsapp.htm",
+  column.labels = c("Log Sale Price <br> (standard error)"),
   covariate.labels = c(
     "Constant",
     "Age When Sold", "Building Footprint Squared (sqft)", "Taxlot Area Squared (sqft)",
@@ -712,5 +702,84 @@ stargazer(
   digits.extra = 3,
   intercept.bottom = FALSE,
   header = FALSE)
+
+
+MUbase20_log.mod <- data.frame(coef = MUbase20_log.mod[["coefficients"]]) %>%
+  filter(is.na(coef) == FALSE) %>%
+  mutate(interpretlog = exp(coef) - 1)
+                             
+interpretlog <- as.vector(MUbase20_log.mod$interpretlog)
+
+plot(MUbase20_log.mod)
+# remove ecsi, coverly, poverly, noise, gw, slido, JUST FOR VIF TEST
+clean_vif <- MU %>%
+  dplyr::select(conLUST, 
+                conHist, conHistLdm,
+                conAirHgt,
+                conLSHA, conFld100, conSlp25, 
+                conStorm, conWater,
+                conTranSub)
+clean_vif_names <- names(clean_vif)
+con_names_vif <- paste(clean_vif_names, collapse = " + ")
+
+# took out canopy cover and vacancy dummy
+MUbase_log_vif = formula(paste0("SALEPRICElog ~ 
+                             age_sold + totalsqft_sqd + taxlot_area_sqd + 
+                         FLOORS + maxheight + bldguse + 
+                         f_baths + h_baths + 
+                         percent_vacant + sale_z_new + 
+                         CN_score + dist_cityhall + dist_ugb + ", con_names_vif))
+
+MUbase_log_vif.mod <- lm(MUbase_log_vif, MUdat1)
+summary(MUbase_log_vif.mod)
+alias(MUbase_log_vif.mod)
+car::vif(MUbase_log_vif.mod, singular.ok = TRUE)
+
+
+MUcons_table <- MUdat1 %>%
+  dplyr::select(conECSI, conLUST, 
+                conHist, conHistLdm, conNatAm,
+                conCovrly, conPovrly,
+                conAirHgt, conHeliprt, conNoise,
+                conGW,
+                conLSHA, conSLIDO, conFld100, conSlp25, 
+                conSewer, conStorm, conWater,
+                conWetland,
+                conInstit, conPrvCom, conPubOwn,
+                conView,
+                conTranCap, conTranInt, conTranSub) %>%
+  pivot_longer(cols = starts_with("con"),
+               names_to = "Constraint",
+               values_to = "Value") %>%
+  group_by(Constraint, Value) %>%
+  summarize(Count = n()) %>%
+  pivot_wider(names_from = Value,
+              values_from = Count) %>%
+  rename(Yes = `1`,
+         No = `0`) %>%
+  mutate(Percent_Yes = (Yes/No)*100)
+
+rawMUcons_table <- MU %>%
+  dplyr::select(conECSI, conLUST, 
+                conHist, conHistLdm, conNatAm,
+                conCovrly, conPovrly,
+                conAirHgt, conHeliprt, conNoise,
+                conGW,
+                conLSHA, conSLIDO, conFld100, conSlp25, 
+                conSewer, conStorm, conWater,
+                conWetland,
+                conInstit, conPrvCom, conPubOwn,
+                conView,
+                conTranCap, conTranInt, conTranSub) %>%
+  pivot_longer(cols = starts_with("con"),
+               names_to = "Constraint",
+               values_to = "Value") %>%
+  group_by(Constraint, Value) %>%
+  summarize(Count = n()) %>%
+  pivot_wider(names_from = Value,
+              values_from = Count) %>%
+  rename(Yes = `1`,
+         No = `0`) %>%
+  mutate(Percent_Yes = (Yes/No)*100)
 
 ```
