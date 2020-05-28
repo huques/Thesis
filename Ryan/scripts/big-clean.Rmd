@@ -16,7 +16,7 @@ library(magrittr)
 
 # Import joined thesis data
 ```{r}
-df <- read.csv(here("DATA", "altered", "thesis-data.csv"))
+df <- read.csv(here("DATA", "altered", "thesis-data_4-25.csv"))
 
 constraints <- c("conAirHgt",
                     "conCovrly", "conPovrly",
@@ -29,6 +29,10 @@ constraints <- c("conAirHgt",
 # define helper function to switch NAs in the constraints to 0s
 to0 <- function(x){ifelse(is.na(x), 0, x)}
 
+pullVarname <- function(vars){
+  sapply(vars, gsub, pattern = "\\(|\\)|I\\(|log|\\^2", replace = "") %>%
+    unique()
+}
 
 # CREATE FLAG & ARMS LENGTH VARIABLES
 df %<>%
@@ -41,22 +45,25 @@ df %<>%
          trust_flag = grepl("TRUST", OWNER1) | 
            grepl("TRUST", OWNER2) | grepl("TRUST", OWNER3), 
          top_1 =  SALEPRICE > quantile(SALEPRICE, .99),
-         price_diff = SALEPRICE - LANDVAL3, 
-         price_ratio = SALEPRICE/LANDVAL3 * 100,
          vacant_dummy = PRPCD_DESC == "VACANT LAND",
-         
+         price_diff = SALEPRICE - LANDVAL3, 
+         price_ratio = SALEPRICE/LANDVAL3 * 100,         
          #make percentages
          pct_canopy_cov = 100*pct_canopy_cov,
          percent_vacant = 100*percent_vacant)
 
 #export to csv
-#write.csv(df, here("DATA", "altered", "thesis-data_4-5.csv"))
+#write.csv(df, here("DATA", "altered", "thesis-data_4-25.csv"))
 ```
 
 
-# Drop observations
+# Drops 
+• `df`: 34,628 observations
+
+• `trim`: 31,388
+
 ```{r}
-df <- read.csv(here("DATA", "altered", "thesis-data_4-5.csv"))
+df <- read.csv(here("DATA", "altered", "thesis-data_4-25.csv"))
 
 # MAKE DROPS
 trim <- df %>% 
@@ -69,7 +76,7 @@ trim <- df %>%
     TRUE ~ YEARBUILT))
 
 constraint_sums <- trim %>%
-  select(constraints) %>%
+  dplyr::select(constraints) %>%
   rowSums()
 
 trim %<>%
@@ -79,18 +86,18 @@ trim %<>%
 # SQUARE FOOTAGE VARIABLES
 # garage sqft
 gar_sqft_sum <- trim %>%
-  select(matches("gar")) %>%
+  dplyr::select(matches("gar")) %>%
   rowSums()
 
 # attic sqft
 attic_sqft_sum <- trim %>%
-  select(matches("attic")) %>%
+  dplyr::select(matches("attic")) %>%
   rowSums()
 
 # basement sqft
 bsmt_sqft_sum <- trim %>%
-  select(matches("bsmt")) %>%
-  select(-c("BSMT.PARKING","BSMT.GAR")) %>%
+  dplyr::select(matches("bsmt")) %>%
+  dplyr::select(-c("BSMT.PARKING","BSMT.GAR")) %>%
   rowSums()
 
 # define dummies
@@ -105,7 +112,18 @@ trim %<>%
 ```
 
 # Clean SFR
+(drop based on number of units, full baths, BLDGSQFT, and taxlot area)
+• `sfr.dat`: 24,715
+
+(drop missing variables used for regression, missing at random?)
+• `sfr.dat.cleaned`: 22,438
+
 ```{r}
+sfr_vars <- c("dist_cityhall", "dist_ugb", "h_baths",
+              "f_baths", "AREA", "maxheight", "totalsqft", "garage_dum","bsmt_dum",
+              "pct_canopy_cov", "YEARBUILT", "n_fireplaces", "CN_score", "attic_dum", "year_sold", 
+              "percent_vacant", "I(AREA^2)", "I(totalsqft^2)", "I(CN_score^2)")
+
 sfr.dat <- trim %>%
   filter(prop_type == "Single-family") %>%
   mutate(empty_lot_flag = BLDGSQFT == 0, is.na(totalsqft),
@@ -113,33 +131,50 @@ sfr.dat <- trim %>%
          big_sqft_flag = BLDGSQFT > 10000,
          big_bsmt_flag = bsmt_sqft > 9000,
          big_area_flag = AREA > 100000) %>%
-        # dist_ugb = dist_ugb / 1000,
-        # AREA = AREA / 100,
-        # BLDGSQFT = BLDGSQFT/100) %>%
-    filter(empty_lot_flag == F,
-         maybe_mfr_flag == F, 
-         big_area_flag == F,
-         big_sqft_flag == F, 
-         price_ratio > 100)
+    filter(!empty_lot_flag,
+         !maybe_mfr_flag, 
+         !big_area_flag,
+         !big_sqft_flag)
 
-#write.csv(sfr.dat, here("DATA", "altered", "sfr_clean_4-5.csv"))
+sfr.dat.cleaned <- sfr.dat %>%
+  select(pullVarname(sfr_vars), constraints, STATE_ID, 
+         BLDGSQFT, lnprice, nbhd, sextant) %>%
+  drop_na()
+
+#write.csv(sfr.dat.cleaned, here("DATA", "altered", "sfr-cleaned.csv"))
 ```
 
 # Clean MFR
+• `mfr.dat`: 4,187
+(drop missing variables used for regression, missing at random?)
+
+• `mfr.dat.cleaned`: 
 ```{r}
+mfr_vars <- c("dist_cityhall", "dist_ugb", "h_baths",
+              "f_baths", "AREA", "maxheight", "garage_dum","bsmt_dum", 
+              "pct_canopy_cov", "YEARBUILT", "CN_score", "attic_dum", "year_sold", "n_fireplaces",
+              "percent_vacant", "n_units", "n_buildings", "totalsqft", "I(totalsqft^2)", "I(AREA^2)", "I(f_baths^2)")
+
+
 mfr.dat <- trim %>%
-  filter(prop_type == "Multi-family") %>%
-  filter(!(is.na(totalsqft) & BLDGSQFT == 0),
+  filter(prop_type == "Multi-family",
+         !(is.na(totalsqft) & BLDGSQFT == 0),
          AREA < 100000) %>%
   mutate(bldgsqft_imp = case_when(is.na(totalsqft) ~ BLDGSQFT,
                                   BLDGSQFT == 0 ~ totalsqft,
                                   TRUE ~ BLDGSQFT),
-         imputed = is.na(totalsqft)) 
+         imputed = is.na(totalsqft)) %>%
+  filter(bldgsqft_imp < 60000)
 
-# how many missing fireplaces?
-# mfr.dat %>% filter(is.na(n_fireplaces)) %>% count
-# write.csv(mfr.dat, here("DATA", "altered", "mfr_clean_4-5.csv"))
+mfr.dat.cleaned <- mfr.dat %>%
+  select(pullVarname(mfr_vars), constraints, STATE_ID, 
+         BLDGSQFT, lnprice, nbhd, sextant) %>%
+  drop_na()
+
+# write.csv(mfr.dat, here("DATA", "altered", "mfr-cleaned.csv"))
+
 ```
+
 
 
 
