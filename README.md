@@ -1,7 +1,7 @@
 # Thesis
 
 # General Overview
-### Title: BPS Property Attributes Dataset
+### Title: Constructing the BPS Property Attributes Dataset
 #### Non-market Valuation in Portland, OR
 This project is part of a year-long thesis in consultation with Noelwah Netusil at Reed College and the Bureau of Planning and Sustainability. 
 
@@ -217,7 +217,48 @@ taxlots %<>%
                                      taxlots,
                                      which = "Euclidean"))
                                      
-```                              
+```  
+5. Distance to nearest point of the UGB
+
+This variable measures the Euclidean distance in feet of each property to the UGB. Generated using the `st_distance()` function within the `sf` and `sp` packages. This approach calculates distances using the centroids of MULTIPOLYGON taxlots. So, in the process, the st_geometry() attribute of the taxlot spatial data frame is changed from polygons to points. The geometry can be reset to MULTIPOLYGONS afterward. The code is reproduced below:
+
+```{r}
+# Transform UGB shapefile to correct coordinate system
+ugb %<>% 
+  st_transform(2913) %>% 
+  st_cast(., "MULTILINESTRING")
+
+# Convert to sp object since we use the rgeos::NearestPoints function that requires this
+# data type, using sp:as_Spatial()
+ugb.sp <- as_Spatial(ugb)
+
+
+# Pull taxlot polygons & calculate centroids
+centroids <- st_geometry(fugly)
+centroids.sp <- as_Spatial(centroids)
+
+# gNearestPoints returns vector of nearest point on taxlot (the centroid) 
+# and the nearest point on the ugb. We take the ugb point, the second item in the list.
+
+# Initialize empty list
+nearest_points <- list(NA, nrow(fugly))
+
+# call gNearestPoints over all observations in `taxlots` to return list of point geometries
+for(i in 1:nrow(fugly)){
+  nearest_points[i] <- st_as_sf(rgeos::gNearestPoints(centroids.sp[i,], ugb.sp)[2,])
+}
+
+# Combine/"unlist" the point geometries
+nearest_points <- do.call(c, nearest_points)
+
+# When given two vectors, st_distance(a, b) returns distance between all pairs of points in a and a.
+# ex. if a = c(1,2,3) b = c(0, 9, 8). then st_distance(a, b) = (1, 8, 7, 2, 7, 6, 3, 6, 5)
+# mapply() loops over nearest_points and centroids simultaneously so usign the above a, b, 
+# we end up with (1,7,5)
+fugly$dist_ugb <- mapply(FUN = st_distance, nearest_points, centroids)
+```
+
+
 ***
 
 # Technical Description
