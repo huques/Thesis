@@ -1,102 +1,133 @@
 ---
-title: "Construct Full Data Frame 2"
+title: "Construct Full Data Frame 3"
 output: pdf_document
 ---
 
+
+### 0. Table of Contents
+1. Load Packages
+2. Set Pathnames and Load Databases
+3. Take Sample of Taxlots
+4. Complete Neighborhood Walkscore
+5. Neighborhood Fixed Effects
+6. Percent Vacant Properties within 200 ft
+7. Schools 
+8. Distance to City Hall (Central Business District)
+9. Distance to Urban Growth Boundary
+10. Collapse Footprints
+11. Prune and Reshape Impsegcop
+12. Prune and Reshape Impseg
+13. Accessory Dwelling Unit Dummy
+14. Percent of Lot Covered by Canopy
+15. Constraints
+16. conFld100 - Building Footprint
+17. Spatial Quadrants
+18. Partial Constraints
+19. Zoning Changes
+20. Export Full Data Frame
+
+
 ### 1. Load packages
 ```{r}
-library(tidyverse)
+library(data.table)
+library(here)
+library(magrittr)
+library(readxl)
 library(sf)
 library(sp)
 library(stringr)
-library(data.table)
-library(magrittr)
-library(readxl)
-library(here)
-
-datanames <- c("gisimpcop", "impsegcop", "gispropcop", "allpropcop", "segchar", "rollhist", "impseg", "salescop","school", "imps", "constraints", "rollhist_wide", "taxlots", "footprints")
-datanames
-
+library(tidyverse)
 ```
 
 
-
-### 2. Set pathnames and load databases
+### 2. Set Pathnames and Load Databases
 ```{r}
-#----------------------
 # GDB sent 10/29 via email
 gdb <- here::here("DATA", "data2.gdb")
-
 capacity <- st_read(gdb, layer = "bli_development_capacity")
 impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
 gisimpcop <- st_read(gdb, layer = "CoP_GISImprovement")
 impseg <- st_read(gdb, layer = "imp_segments")
 school <- st_read(gdb, layer = "school_attendance_areas")
 
-#----------------------
 # GDB sent 10/10 via USB
 gdb2 <- here::here("DATA", "data1.gdb")
-
 taxlots <- st_read(gdb2, "taxlots_20191010")
 footprints <- st_read(gdb2, "building_footprints_20191010")
 
-#----------------------
 # GDB sent 11/12 via email
 gdb3 <- here::here("DATA", "data_20191112.gdb")
-
 bli_constraints <- st_read(gdb3, "bli_constraints_all")
 nbhd <- st_read(gdb3, "neighborhoods_no_overlap")
 
-#----------------------
 # GDB sent 11/22 via email
 gdb4 <- here::here("DATA", "tree_canopy.gdb")
-
 bli_constraints_v2 <- st_read(gdb4, "bli_constraints_v2_pts_run4")
 
-#----------------------
 # SHP sent 11/25 via email
-
 ugb <- st_read(here::here("DATA", "ugb",
                               "ugb.shp"))
 
-#----------------------
-# GDB sent 2/10 via email
-gdb5 <- here::here("DATA", "canopy_20200210.gdb")
+# SHP sent 11/22 via email
+zoningaug2014 <- st_read(here("DATA", "Zoning_History",
+                              "Zoning_2014_Aug_pdx.shp"))
+zoningfeb2014 <- st_read(here("DATA", "Zoning_History",
+                              "Zoning_2014_Feb_pdx.shp"))
+zoningaug2015 <- st_read(here("DATA", "Zoning_History",
+                              "Zoning_2015_Aug_pdx.shp"))
+zoningfeb2015 <- st_read(here("DATA", "Zoning_History",
+                              "Zoning_2015_Feb_pdx.shp"))
+zoningaug2016 <- st_read(here("DATA", "Zoning_History",
+                              "Zoning_2016_Aug_pdx.shp"))
+zoningfeb2016 <- st_read(here("DATA", "Zoning_History",
+                              "Zoning_2015_Feb_pdx.shp"))
+zoningaug2017 <- st_read(here("DATA", "Zoning_History",
+                              "Zoning_2017_Aug_metro.shp"))
+zoningaug2018 <- st_read(here("DATA", "Zoning_History",
+                              "Zoning_2018_Aug_pdx.shp"))
+zoningfeb2018 <- st_read(here("DATA", "Zoning_History",
+                              "Zoning_2018_Feb_pdx.shp"))
 
-canopy <- st_read(gdb5, "canopy_taxlot_intersect")
-
-#----------------------
-# GDB 2/11 from PortlandMaps
-walk_gdb <- here::here("DATA", "Complete_Neighborhoods_Scoring_Surface")
-
-walk <- st_read(walk_gdb, 
-           layer = "Complete_Neighborhoods_Scoring_Surface")
-
-#----------------------
-# Load crosswalk from Nick sent via email 02/04
+# XLSX sent 2/04 via email 
 crosswalk <- read_xlsx(here::here("DATA", "zoning_crosswalk.xlsx"))
 crosswalk %<>%
   rename(sale_zone = `Base Zone`)
 
-#----------------------
-# Load
+# GDB sent 2/10 via email
+gdb5 <- here::here("DATA", "canopy_20200210.gdb")
+canopy <- st_read(gdb5, "canopy_taxlot_intersect")
+
+# GDB 2/11 from PortlandMaps
+walk_gdb <- here::here("DATA", "Complete_Neighborhoods_Scoring_Surface")
+walk <- st_read(walk_gdb, 
+           layer = "Complete_Neighborhoods_Scoring_Surface")
+
+# GDB sent 2/13 via email 
 intersectionz <- st_read(here::here("DATA", "constraint_layers.gdb"),
                          "Intersectionz")
+
+# Source: done in GIS using FEMA map + footprints
+ftfld_ids <- st_read(here("DATA", "ft_fld.gdb"), 
+                     layer = "ft_floodplain")
+
+# Source: https://gis-pdx.opendata.arcgis.com/datasets/portland-administrative-sextants
+sex <- here("DATA", "Portland_Administrative_Sextants",
+            "Portland_Administrative_Sextants.shp") %>% 
+  sf::st_read()
+
 
 ```
 
 
-
-### Take sample of taxlots
+### 3. Take Sample of Taxlots
 ```{r}
 begin <- as.Date("2015-01-01")
 end <- as.Date("2019-01-01")
 
-# Reformat SALEDATE column (save as date type so that we can
-# do math on it)
+# Change SALEDATE column to date object
 taxlots$saledate <- as.Date(as.character(taxlots$SALEDATE), "%m/%d/%Y")
 
-# Take time interval of taxlots we're interested in (5-years)
+# Filter by time interval we're interested in (5-years)
 taxlots_pruned <- taxlots %>%
   filter(saledate > begin & saledate < end)
 
@@ -108,7 +139,7 @@ propids <- taxlots_pruned %>%
 
 
 #-------------------------------------------------------------------------------
-# define repeat observation function
+# define repeat observation function -- used after each join as a check 
 n_repeats <- function(data, id_var){
   id_var <- enquo(id_var)
   keys <- data %>%   # make df of id variables
@@ -120,149 +151,41 @@ n_repeats <- function(data, id_var){
     pull(n) %>%   # return as integer (instead of tibble)
     as.character() 
 }
-# YAY! They're sums below are both zero, meaning we have 1:1 keys!
-#n_repeats(taxlots_pruned, STATE_ID)
-#n_repeats(taxlots_pruned, PROPERTYID)
-
-
 ```
 
 
-### Complete Neighborhood Walkscores!!!
+### 4. Complete Neighborhood Walkscore
 
 ```{r}
 # Transform crs from 4326 to 2913
 walk %<>% 
   st_transform(2913) %>%
   dplyr::select(CN_score) 
-# dropped all other variables (like shape area) to avoid
-# renaming things and later confusion
-# Join!
+
+# join to dataframe
 fugly <- sf::st_join(st_centroid(taxlots_pruned), walk)
 paste0("walkscore Join: ", n_repeats(fugly, STATE_ID)) %>% print()
-
 ```
 
-### Neighborhood Fixed Effects
+
+### 5. Neighborhood Fixed Effects
 
 ```{r}
-
 nbhd %<>% 
   dplyr::select(-c(OBJECTID, Shape_Leng, Shape_Length, Shape_Area))
 
+# join to dataframe
 fugly <- st_join(st_centroid(fugly), nbhd)
 print(paste0("nbhd Join: ",  n_repeats(fugly, STATE_ID)))
-
-#-------------------------------------------------------------------------------------------------------------
-# 
-# # Bring in neighborhood fixed effects
-# df <- st_intersection(taxlots_pruned, nbhd)
-# 
-# # Problem: there are 567 observations where STATE_IDs are double counted.
-# nbhd.overlap <- df %>%
-#   arrange(STATE_ID) %>%
-#   dplyr::group_by(STATE_ID) %>%
-#   dplyr::mutate(n = n()) %>%
-#   dplyr::filter(n > 1 )
-# 
-# # Calculate intersection areas. 
-# # Notice that new geometries were generated from the st_intersection() function
-# # used to create `df`. These geometries are the intersections between the 99 neighborhoods
-# # and our 34628 taxlots. A STATE_ID appears in `df` multiple times when a single taxlot 
-# # intersects more than one neighborhood. 
-# 
-# #------------------ FIX MULTI STATE_ID DOUBLE COUNT -----------------------
-# 
-# # I place  a double-counted taxlot in the neighborhood that intersects a plurality of 
-# # its total area.
-# 
-# # Add area variable
-# nbhd.overlap$area.nbhd <- st_area(st_geometry(nbhd.overlap))
-# 
-# # Groupby STATE_ID and add a variable that is the maximum of the double counted taxlots' areas
-# nbhd.overlap %<>%
-#   group_by(STATE_ID) %>%
-#   mutate(max = max(area.nbhd)) 
-# 
-# nbhd.big <- nbhd.overlap %>%
-#   filter(as.numeric(max) == as.numeric(area.nbhd)) 
-# 
-# # DO NOT NEED TO DEFINE UNLESS WE NEED THE GEOMETRIES FOR SOME REASON
-# nbhd.small <- nbhd.overlap %>%
-#   filter(as.numeric(max) != as.numeric(area.nbhd)) 
-# # since nbhd.small has more rows than nbhd.big, we know that some taxlots
-# # intersect more than 2 neighborhoods.
-# 
-# nbhd.single <- df %>%
-#   arrange(STATE_ID) %>%
-#   dplyr::group_by(STATE_ID) %>%
-#   dplyr::mutate(n = n()) %>%
-#   dplyr::filter(n == 1)
-# 
-# #-----------------------------------------
-# # NOT NECESSARY!
-# # This loop combines the geometries from where the STATE_IDs had split & replaces partial geometries
-# # in nbhd.big with complete geometries.
-# #for(r in 1:nrow(nbhd.big)){
-# #  id <- nbhd.big[r,]$STATE_ID
-# #  tinydf <- nbhd.small %>%
-# #    filter(STATE_ID == id)
-# #  st_geometry(nbhd.big[r,]) <- st_combine(st_geometry(tinydf))
-# #}
-# #-----------------------------------------
-# 
-# nbhd.single$area.nbhd <- NA # define these columns to ensure rbind() works properly.
-# nbhd.single$max <- NA
-# df <- rbind(nbhd.single, nbhd.big) # correct  number of dimensions!
-# 
-# dim(df) # note that the dimension of the newly created df is smaller than the taxlots, meaning there 
-# # are some properties in which there was no corresponding neighborhood (this introduces selection
-# # bias). 
-# 
-# # RESOLVE SELECTION BIAS:
-# # list of STATE_IDS that were dropped
-# diff <- setdiff(unique(taxlots_pruned$STATE_ID), unique(df$STATE_ID))
-# 
-# # Rename ambiguous nbhd geometry columns 
-# df %<>%
-#   rename(Shape_Leng.nbhd = Shape_Leng,
-#          Shape_Length.nbhd = Shape_Length.1,
-#          Shape_Area.nbhd = Shape_Area.1,
-#          area.nbhd.insx = area.nbhd,
-#          NBHD_NAME = NAME)
-# 
-# # grab the lots for which no nbhd was recorded (those that went missing in the intersection)
-# # initialize vars that were added in the intersection (so rbind can join properly)
-# removed_lots <- taxlots_pruned %>%
-#   filter(STATE_ID %in% diff) %>%
-#   mutate(Shape_Leng.nbhd = NA,
-#          Shape_Length.nbhd = NA,
-#          Shape_Area.nbhd = NA,
-#          area.nbhd.insx = NA, 
-#          NBHD_NAME = NA,
-#          MapLabel = NA,
-#          COMMPLAN = NA,
-#          SHARED = NA,
-#          COALIT = NA,
-#          HORZ_VERT = NA,
-#          NBRNUM = NA,
-#          AUDIT_NBRH = NA,
-#          OBJECTID = NA,
-#          n = NA,
-#          max = NA)
-#          
-# # binding retains the lots that had dropped out!
-# df <- rbind(df, removed_lots)
 ```
 
 
-### Percent Vacant Properties within Half Mile *correction-200 ft*
+### 6. Percent Vacant Properties within 200 ft
 
 ```{r}
 # explicitly define the missing values in a factor level
 taxlots$STATE_ID <- fct_explicit_na(taxlots$STATE_ID)
 
-# selects variables
 # df of unique obs -- 197,131 obs
 vacancy_pruned <- taxlots %>%
   dplyr::select(STATE_ID, PRPCD_DESC, Shape) %>%
@@ -276,7 +199,6 @@ vacancy_pruned %<>%
                             TRUE ~ 0))
 
 # creates a buffer called buffer_dist
-# adds this buffer as an additional geometry to the main dataset
 # 1 ft = 0.3048 meters
 conv <- 0.3048
 ft <- 200
@@ -287,7 +209,7 @@ buffy <- taxlots_pruned %>%
   rename(ShapeBuffy = Shape) %>%
   st_buffer(buffer_dist)
 
-# join buffy and vacancy_pruned 
+# join buffy and vacancy_pruned columns 
 vacant_join_buffy <- st_join(buffy, vacancy_pruned, left = TRUE)
 
 # calculates percent vacant houses in buffer
@@ -303,107 +225,40 @@ vacant_var <- vacant_join_buffy %>%
 
 # join to dataframe 
 fugly <- left_join(fugly, vacant_var, by = "STATE_ID")
-rm(vacant_var, vacant_join_buffy)
-
 print(paste0("vacant Join: ",  n_repeats(fugly, STATE_ID)))
-
+rm(vacant_var, vacant_join_buffy, buffy, vacancy_pruned)
 ```
 
-### St_intersection school to taxlots
+
+### 7. Schools
 
 One problem with an st_intersection is some lots are divided by the school catchment area boundaries, resulting in non-unique STATE_IDs. The st_intersection adds a second observation if it a tax lot is partially within catchment area 1 and partially within catchment area 2.
 
 This is the reason the number of observations rose after the intersection. 
 
 ```{r}
-
 school %<>% 
   dplyr::select(-c(Shape_Leng, Shape_Length, Shape_Area))
 
+# join to dataframe
 fugly <- st_join(st_centroid(fugly), school)
 print(paste0("school Join: ",  n_repeats(fugly, STATE_ID)))
 rm(school)
-
-# -----------------------------------------------------------------------------------------------------------
-# 
-# # Naive st_intersection 
-# testjoint3 <- st_intersection(fugly, school)
-# 
-# # Save multiple STATE_ID obs in `schzone`
-# schzone <- testjoint3 %>%
-#   group_by(STATE_ID) %>%
-#   mutate(n = n()) %>%
-#   filter(n > 1)
-# 
-# # We can see that adding the number of unique stateIDs that are observed more than once
-# # to the old dimensions is equal to the number of rows in testjoint3.
-# nrow(m2) + length(unique(schzone$STATE_ID)) == nrow(testjoint3)
-# 
-# # Fix: choose a catchment area for multiple STATE_ID lots depicted below. 
-# schzone %>%
-#   arrange(STATE_ID) %>%
-#   select(contains("SCH"), Shape_Area, Shape_Area.1) %>%
-#   st_drop_geometry() %>%
-#   head() %>%
-#   kable() %>% 
-#   kable_styling(full_width = F)
-# 
-# 
-# # Choose based on percentage of lot within that catchment area
-# schzone$area.school <- st_area(st_geometry(schzone))
-# testjoint3$area.school <- st_area(st_geometry(testjoint3))
-# 
-# schzone %<>%
-#   group_by(STATE_ID) %>%
-#   mutate(max = max(area.school)) 
-# 
-# schzone.big <- schzone %>% # add containing containing max area by STATE_ID
-#   filter(as.numeric(max) == as.numeric(area.school)) 
-# 
-# schzone.small <- schzone %>%
-#   filter(as.numeric(max) != as.numeric(area.school)) 
-# 
-# schzone.big$STATE_ID == schzone.small$STATE_ID # this vector should all be true
-# 
-# # Use st_combine to meld the broken boundaries from schzone.small and schzone.big geometry sets.
-# # note: I did not use st_union(st_geometry(schzone.small), st_geometry(schzone.big)) because
-# # st_union() takes the cartesian union of both giving a much larger feature set than neccessary, 
-# # we only want the diagonals
-# for(r in 1:nrow(schzone.big)){
-#   st_geometry(schzone.big[r,]) <- st_combine(c(st_geometry(schzone.big)[r], 
-#                st_geometry(schzone.small)[r]))
-# }
-# 
-# # Now, combine the fixed geometries and catchment areas with the single-observation
-# # subset of `testjoint3`
-# single.school <- testjoint3 %>%
-#   group_by(STATE_ID) %>%
-#   mutate(n = n(),
-#          max = NA) %>%
-#   filter(n == 1) # This is the right number of rows, 34426
-# 
-# # Row number check
-# nrow(schzone.big) + nrow(single.school) == nrow(taxlots_pruned)
-# 
-# testjoint3 <- rbind(schzone.big, single.school)
 ```
 
 
-### Generate distance to city hall
+### 8. Distance to City Hall (Central Business District)
 
 ```{r}
-# grab lat long from google maps
+# grab lat and long from google maps
 cityhall <- data.frame(place = "City Hall",
                        long = -122.679103,
                        lat = 45.515000) %>%
-  # reformat from df to sf object
-  st_as_sf(coords = c("long", "lat")) %>%
-  # Set coordinate system
-  st_set_crs(4326) %>%
+  st_as_sf(coords = c("long", "lat")) %>% # reformat from df to sf object
+  st_set_crs(4326) %>%   # Set coordinate system
   st_transform(2913)
   
   
-
 # HERE IS THE ERROR
 fugly$dist_cityhall <- st_distance(cityhall, fugly, 
                                    which = "Euclidean")[1,]
@@ -411,11 +266,11 @@ rm(cityhall)
 ```
 
 
-### Distance to Urban Growth Boundary!!!!
+### 9. Distance to Urban Growth Boundary
 
 This approach calculates distances using the centroids of MULTIPOLYGON taxlots. So, in the process, the st_geometry() attribute of the taxlot spatial data frame is changed from polygons to points. But the geometry can be reset to MULTIPOLYGONS afterward.
-```{r, warning=FALSE}
 
+```{r, warning = FALSE}
 # Transform UGB shapefile
 ugb %<>% 
   st_transform(2913) %>% 
@@ -449,18 +304,14 @@ nearest_points <- do.call(c, nearest_points)
 # mapply() loops over nearest_points and centroids simultaneously so usign the above a, b, 
 # we end up with (1,7,5)
 fugly$dist_ugb <- mapply(FUN = st_distance, nearest_points, centroids)
-
-
-
 rm(nearest_points, ugb.sp, ugb, centroids.sp, centroids)
+
 ```
 
 
+### 10. Collapse Footprints
 
-
-### Collapse footprints
-
-Now we will try merging/collapsing footprints on this smaller subset of the entire data set, only homes/MFR that have sold in the last 5 years.
+Now we will try merging/collapsing footprints on this smaller subset of the entire data set, only homes that have sold in the last 5 years.
 
 ```{r, warning = FALSE}
 # grab only the footprints associated with stateids in our sample
@@ -487,31 +338,19 @@ ftprints_pruned %<>%
             n_units = sum(UNITS_RES, na.rm = T),
             n_buildings = n()) 
 
-
-
-# Left join ftprints_pruned to fugly
+# Join to dataframe
 fugly <- left_join(fugly, ftprints_pruned, 
                by = "STATE_ID")
 print(paste0("feet Join: ",  n_repeats(fugly, STATE_ID)))
 rm(ftprints_pruned)
-#-------------------------------------------------------------------------------
-# # check if these ids uniquely identify the building footprints
-# multi_foot <- ftprints_pruned %>%
-#   lwgeom::st_make_valid() %>%
-#   group_by(STATE_ID) %>%
-#   mutate(n = n()) %>%
-#   filter(n > 1)
-# 
-# dim(multi_foot) # they do not
-
 ```
 
 
-### Prune and reshape impsegcop
-Impsegcop has our attached garage, patio, basement, attic, deck, variables among others. Reshape to get the square footage of each segment type. For properties that have multiple decks, attics, etc, the square footage was summed by type, so currently there is no way to distinguish between properties that have multiple attics or basements. We can think about whether proxying with a summed square footage is actually reasonable. 
-```{r}
+### 11. Prune and Reshape Impsegcop
 
-# Second attempt to widen using dcast: works perfectly on 1:1 data
+Impsegcop has our attached garage, patio, basement, attic, deck, variables among others. Reshape to get the square footage of each segment type. For properties that have multiple decks, attics, etc, the square footage was summed by type, so currently there is no way to distinguish between properties that have multiple attics or basements. We can think about whether proxying with a summed square footage is actually reasonable. 
+
+```{r}
 # Reshape using dcast. Set fun.aggregate to sum, which means that we
 # sum the square footage across multiple obs.
 impsegcop_wide <- impsegcop %>%
@@ -525,36 +364,24 @@ impsegcop_wide <- dcast(setDT(impsegcop_wide), PropID ~ SegmentType,
   dplyr::rename(PROPERTYID = PropID)
 
 
-# Left join impsegcop_wide to fugly
+# Join to dataframe
 fugly <- left_join(fugly, impsegcop_wide, 
                by = "PROPERTYID")
-
 print(paste0("fugly impsegcop Join: ",n_repeats(fugly, STATE_ID)))
-
 rm(impsegcop_wide)
-#-------------------------------------------------------------------------------
-# dim(isc_pruned)
-# sum(data.frame(table(isc_pruned$PropID))$Freq > 1)
-# nrow(multi_isc)
-# # check if propids ids uniquely identify the building footprints
-# multi_isc <- isc_pruned %>%
-#   group_by(PropID, SegmentType) %>%
-#   mutate(n = n()) %>%
-#   filter(n == 1)
-# Code below turns 0 meaning PropID uniquely identifies observations
-# sum(data.frame(table(impsegcop_wide$PropID))$Freq > 1)
-
 ```
 
 
-### Prune and Reshape Impseg
-We need the columns PlumbingCode and Fire_place_Lookup from the impseg df. However, it appears that there are other value variables such as perimeter, neighborhood marketvalue, total area, etc. that could be useful for our analysis. 
+### 12. Prune and Reshape Impseg
+
+We need the columns PlumbingCode and Fire_Place_Lookup from the impseg df. However, it appears that there are other value variables such as perimeter, neighborhood market value, total area, etc. that could be useful for our analysis. 
+
 ```{r}
 is_pruned <- impseg %>%
   filter(PropertyID %in% propids)
 
-#--------------------------------------------
-# Using base r because dplyr code took too long
+#-------------------------------------------------------------------------------
+#BATHROOMS
 
 # Take only observations for which Plumbing_Code is non-missing
 bath <- is_pruned %>%
@@ -565,9 +392,13 @@ bath <- is_pruned %>%
   dplyr::rename(PROPERTYID = PropertyID) %>%
   dplyr::ungroup()
 
+# join to dataframe
 fugly <- left_join(fugly, bath, by = "PROPERTYID")
 print(paste0("fugly bath Join: ",  n_repeats(fugly, STATE_ID)))
 
+
+
+#-----------------
 # Recode bathrooms 
 # Initialize columns: f.baths = total full baths, h.baths = total half baths
 fugly$f_baths <- NA
@@ -593,8 +424,9 @@ fugly$h_baths <- bath_matrix[2,]
 
 rm(bath_matrix)
 
+#-------------------------------------------------------------------------------
+# FIREPLACES
 
-# ---------------------------------
 # Which segment types contain the fireplace code?
 # `fire` is a data frame of all nonmissing Fire_Place_Code observations
 
@@ -609,7 +441,7 @@ fire <- is_pruned %>%
 fugly <- left_join(fugly, fire, by = "PROPERTYID") 
 print(paste0("Fugly fire Join: ",  n_repeats(fugly, STATE_ID)))
 
-
+#------------------
 # Recode fireplaces
 
 # I chose to treat all the fireplaces as the same and count the number of fireplaces/hearth
@@ -627,16 +459,10 @@ extractHearth <- function(string){
 }
 
 fugly$n_fireplaces <- sapply(fugly$fireplace, extractHearth)
-
-
 ```
 
 
-
-
-
-
-### Accessory Dwelling Unit Dummy
+### 13. Accessory Dwelling Unit Dummy
 
 Not specified based on number of ADU's on a property. 
 
@@ -658,37 +484,40 @@ rm(ADU)
 ```
 
 
-
-### Percent of Lot Covered by Canopy
+### 14. Percent of Lot Covered by Canopy
 
 ```{r}
-# create new data frame in order to calculate total taxlot area for our "percentage of lot 
-# covered by canopy" variable
+# create new data frame in order to calculate total taxlot area
 taxlot_areas <- fugly %>%
   rename(taxlot_area = Shape_Area) %>%
   dplyr::select(STATE_ID, taxlot_area) %>% 
   st_drop_geometry()
 
-# This chunk collapses canopy by STATE_ID and generates canopy coverage ratios
+# Collapse canopy by STATE_ID and generate canopy coverage ratios
 canopy <- canopy %>%
-  dplyr::filter(STATE_ID %in% stateids) %>% # filter for just those STATE_IDs in the taxlots pruned data set
+  # filter for just those STATE_IDs in the taxlots pruned data set
+  dplyr::filter(STATE_ID %in% stateids) %>% 
   rename(canopy_area = Shape_Area) %>%
-  dplyr::left_join(taxlot_areas, by = "STATE_ID") %>% # join the taxlot areas by state_id (for the denominator)
-  st_drop_geometry() %>% # dropped because we had many self-intersections when trying to summarize
+  # join the taxlot areas by state_id (for the denominator)
+  dplyr::left_join(taxlot_areas, by = "STATE_ID") %>% 
+  # dropped because we had many self-intersections when trying to summarize
+  st_drop_geometry() %>% 
   dplyr::group_by(STATE_ID) %>% 
-  dplyr::summarise(pct_canopy_cov = sum(canopy_area) / taxlot_area[1], # take the first element in taxlot_area
-            total_canopy_cov = sum(canopy_area), # save numerator and denominator separately
-            taxlot_area = taxlot_area[1]) 
+  # take the first element in taxlot_area
+  dplyr::summarise(pct_canopy_cov = sum(canopy_area) / taxlot_area[1], 
+                   # save numerator and denominator separately
+                   total_canopy_cov = sum(canopy_area), 
+                   taxlot_area = taxlot_area[1]) 
+                   # should end up with 33387 observations
 
-# should end up with 33387 observations
-
+# join to dataframe
 fugly <- left_join(fugly, canopy, by = "STATE_ID")
 print(paste0("Canopy Join: ", n_repeats(fugly, STATE_ID)))
 rm(canopy)
 ```
 
 
-### Constraints!!!
+### 15. Constraints
 
 ```{r}
 # Define dplyr helper functions
@@ -702,7 +531,7 @@ non_id_constraints <- bli_constraints_v2 %>%
 
 st_geometry(non_id_constraints) <- st_geometry(bli_constraints)
 
-# This join increases # of observations because sometimes there are several observations
+# This join increases number of observations because sometimes there are several observations
 # in non_id_constraints that are within the confines of a single taxlot polygon
 firstjoin <- st_join(st_centroid(taxlots_pruned), non_id_constraints, 
                      left = TRUE)
@@ -714,34 +543,33 @@ dumdum_constraints <- firstjoin %>%
   dplyr::select(contains("con")) %>% 
   st_drop_geometry() 
 
+# join to dataframe
 fugly <- left_join(fugly, dumdum_constraints, by = "STATE_ID")
 print(paste0("constraints Join: ", n_repeats(fugly, STATE_ID)))
 rm(firstjoin, dumdum_constraints, non_id_constraints)
-
 ```
 
-### conFld100 - Building Footprint
+
+### 16. conFld100 - Building Footprint
 
 ```{r}
-# read intersected data (done in GIS using FEMA map + footprints)
-ftfld_ids <- st_read(here("DATA", "ft_fld.gdb"), 
-                     layer = "ft_floodplain") %>%
+ftfld_ids %<>%
   dplyr::filter(STATE_ID %in% stateids) %>%
   pull(STATE_ID)
 
+# join to dataframe
 fugly %<>%
   mutate(conFld100_ft = ifelse(STATE_ID %in% ftfld_ids, 1, 0))
 ```
 
-## Get quadrants from PDX opendata
-Source: https://gis-pdx.opendata.arcgis.com/datasets/portland-administrative-sextants
+
+## 17. Spatial Quadrants
 
 ```{r}
-sex <- here("DATA", "Portland_Administrative_Sextants",
-            "Portland_Administrative_Sextants.shp") %>% 
-  sf::st_read() %>%
+sex %<>%
   st_transform(2913)
 
+# join to dataframe
 fugly <- st_join(st_centroid(fugly), sex) %>%
   dplyr::select(PREFIX, STATE_ID) %>%
   st_drop_geometry() %>%
@@ -749,7 +577,9 @@ fugly <- st_join(st_centroid(fugly), sex) %>%
   rename(sextant = PREFIX)
 ```
 
-### Partial Constraints!
+
+### 18. Partial Constraints
+
 ```{r}
 partial <- intersectionz %>%
   dplyr::filter(STATE_ID %in% stateids) %>%
@@ -782,35 +612,18 @@ partial <- partial %>%
 # Replace NA values with 0
 partial[is.na(partial)] <- 0
 
-# Join
+# join to dataframe
 fugly <- left_join(fugly, partial, by = "STATE_ID")
 rm(partial)
 ```
 
 
-### Zoning over time
+### 19. Zoning Changes 
+
+based on zoning code changes effective 5/24/20
 
 ```{r}
-# Load zoning shape files
-zoningaug2014 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2014_Aug_pdx.shp"))
-zoningfeb2014 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2014_Feb_pdx.shp"))
-zoningaug2015 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2015_Aug_pdx.shp"))
-zoningfeb2015 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2015_Feb_pdx.shp"))
-zoningaug2016 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2016_Aug_pdx.shp"))
-zoningfeb2016 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2015_Feb_pdx.shp"))
-zoningaug2017 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2017_Aug_metro.shp"))
-zoningaug2018 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2018_Aug_pdx.shp"))
-zoningfeb2018 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2018_Feb_pdx.shp"))
-
+# create list and name items in the list
 zonelist <- list(zoningaug2014 = zoningaug2014,
                  zoningaug2015 = zoningaug2015,
                  zoningaug2016 = zoningaug2016,
@@ -821,52 +634,28 @@ zonelist <- list(zoningaug2014 = zoningaug2014,
                  zoningfeb2016 = zoningfeb2016,
                  zoningfeb2018 = zoningfeb2018)
 
-colnames(zoningaug2014) <- paste0(colnames(zoningaug2014), "_aug2014")
-st_geometry(zoningaug2014) <- "geometry_aug2014"
+# creates a list `zonelist` with colnames modified
+for(i in 1:length(zonelist)){
+  name <- names(zonelist)[[i]]
+  dat <- (zonelist)[[i]]
+  string <- str_replace(name, "zoning", "_")
+  colnames(dat) <- paste0(colnames(dat), string)
+  st_geometry(dat) <- paste0("geometry", string)
+  zonelist[[i]] <- dat
+}
 
-colnames(zoningfeb2014) <- paste0(colnames(zoningfeb2014), "_feb2014")
-st_geometry(zoningfeb2014) <- "geometry_feb2014"
+# creates a data frame with all dataframes joined using st_join
+df <- st_join(st_centroid(taxlots_pruned), zoningfeb2018)
 
-colnames(zoningaug2015) <- paste0(colnames(zoningaug2015), "_aug2015")
-st_geometry(zoningaug2015) <- "geometry_aug2015"
-
-colnames(zoningfeb2015) <- paste0(colnames(zoningfeb2015), "_feb2015")
-st_geometry(zoningfeb2015) <- "geometry_feb2015"
-
-colnames(zoningaug2016) <- paste0(colnames(zoningaug2016), "_aug2016")
-st_geometry(zoningaug2016) <- "geometry_aug2016"
-
-colnames(zoningfeb2016) <- paste0(colnames(zoningfeb2016), "_feb2016")
-st_geometry(zoningfeb2016) <- "geometry_feb2016"
-
-colnames(zoningaug2017) <- paste0(colnames(zoningaug2017), "_aug2017")
-st_geometry(zoningaug2017) <- "geometry_aug2017"
-
-colnames(zoningaug2018) <- paste0(colnames(zoningaug2018), "_aug2018")
-st_geometry(zoningaug2018) <- "geometry_aug2018"
-
-colnames(zoningfeb2018) <- paste0(colnames(zoningfeb2018), "_feb2018")
-st_geometry(zoningfeb2018) <- "geometry_feb2018"
-
-# using st_join instead: much faster! Note this should not use the fugly df
-df <- st_join(st_centroid(taxlots_pruned), zoningaug2016)
-df <- st_join(df, zoningfeb2014)
-df <- st_join(df, zoningaug2014)
-df <- st_join(df, zoningfeb2015)
-df <- st_join(df, zoningaug2015)
-df <- st_join(df, zoningfeb2016)
-df <- st_join(df, zoningfeb2018)
-df <- st_join(df, zoningaug2017)
-df <- st_join(df, zoningaug2018)
+for(i in 1:(length(zonelist)-1)){
+  df <- st_join(df, zonelist[[i]])
+}
 
 # Create new df with just the shorthand zoning variables across time
 zones_over_time <- df %>%
   dplyr::select(contains("ZONE_"), STATE_ID, saledate) %>%
-  dplyr::select(-contains("TMP")) %>%
-  dplyr::select(contains("ZONE_"), STATE_ID, saledate)%>%
-  dplyr::select(-contains("TMP")) %>%
-  #select(-contains("DESC")) %>%
-  dplyr::select(-contains("CLASS"))
+  dplyr::select(-contains("TMP", "CLASS")) %>%
+  #select(-contains("DESC"))
 
 zones_over_time %<>%
   dplyr::mutate(sale_zone = case_when(saledate >= as.Date("2014-02-01") & saledate < as.Date("2014-08-01") ~ ZONE_feb2014,
@@ -883,7 +672,7 @@ zones_over_time %<>%
                                    as.character(ZONE_aug2018), 
                                    sale_zone))
 
-# Join use crosswalk to generate  prop_type variable: MFR, SFR, mixed use
+# Join use crosswalk to generate prop_type variable: MFR, SFR, mixed use
 zones_over_time %<>%
   dplyr::left_join(crosswalk, by = "sale_zone") %>%
   st_drop_geometry() %>%
@@ -892,17 +681,22 @@ zones_over_time %<>%
   # in email from Nick, Al, and Barry
   dplyr::mutate(prop_type = case_when(sale_zone == "CM"|
                                         sale_zone == "CG"|sale_zone == "CN1"|
-                            sale_zone == "CN2"|sale_zone == "CS"|
-                              sale_zone == "CO1"|
-                              sale_zone == "CO2" ~ "Mixed Use",
-                          TRUE ~ prop_type)) %>%
+                                        sale_zone == "CN2"|sale_zone == "CS"|
+                                        sale_zone == "CO1"|
+                                        sale_zone == "CO2" ~ "Mixed Use",
+                                      TRUE ~ prop_type)) %>%
   dplyr::select(-saledate)
 
+# join to dataframe
 fugly <- left_join(fugly, zones_over_time, by = "STATE_ID")
 print(paste0("zone Join: ", n_repeats(fugly, STATE_ID)))
 ```
 
-## Export full data frame
+
+## 20. Export Full Data Frame
+
+Creates a csv called `thesis-data.csv` that lives in the DATA folder. 
+
 ```{R}
 fugly %>%
   select(-c(SHARED, Shape)) %>%
