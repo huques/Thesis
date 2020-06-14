@@ -1,8 +1,6 @@
 ---
 title: "Construct Full Data Frame 2"
-output:
-  html_document:
-    df_print: paged
+output: pdf_document
 ---
 
 ### 1. Load packages
@@ -110,9 +108,22 @@ propids <- taxlots_pruned %>%
 
 
 #-------------------------------------------------------------------------------
+# define repeat observation function
+n_repeats <- function(data, id_var){
+  id_var <- enquo(id_var)
+  keys <- data %>%   # make df of id variables
+    pull(!!id_var)
+  table(keys) %>%    # turn df into table so each row a is an id
+    data.frame() %>% # turn into df so we get state id and the Freq, or # of times it appears
+    filter(Freq > 1) %>%  # find those that appear multiple times
+    count() %>%   # count the no. of duplicates
+    pull(n) %>%   # return as integer (instead of tibble)
+    as.character() 
+}
 # YAY! They're sums below are both zero, meaning we have 1:1 keys!
-# sum(data.frame(table(taxlots_pruned$STATE_ID))$Freq > 1)
-# sum(data.frame(table(taxlots_pruned$PROPERTYID))$Freq > 1)
+#n_repeats(taxlots_pruned, STATE_ID)
+#n_repeats(taxlots_pruned, PROPERTYID)
+
 
 ```
 
@@ -128,7 +139,7 @@ walk %<>%
 # renaming things and later confusion
 # Join!
 fugly <- sf::st_join(st_centroid(taxlots_pruned), walk)
-print(paste0("walkscore Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$Freq > 1))))
+paste0("walkscore Join: ", n_repeats(fugly, STATE_ID))) %>% print()
 
 ```
 
@@ -140,7 +151,7 @@ nbhd %<>%
   dplyr::select(-c(OBJECTID, Shape_Leng, Shape_Length, Shape_Area))
 
 fugly <- st_join(st_centroid(fugly), nbhd)
-print(paste0("nbhd Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$Freq > 1))))
+print(paste0("nbhd Join: ",  n_repeats(fugly, STATE_ID)))
 
 #-------------------------------------------------------------------------------------------------------------
 # 
@@ -285,13 +296,14 @@ vacant_var <- vacant_join_buffy %>%
   dplyr::mutate(n = n(),
          VACANT = VACANT*1) %>%
   dplyr::filter(!is.na(VACANT)) %>% 
-  dplyr::summarize(percent_vacant = sum(VACANT)/n[1]) 
+  dplyr::summarize(percent_vacant = sum(VACANT)/n[1]) %>%
+  dplyr::rename(STATE_ID = STATE_ID.x)
 
 # join to dataframe 
-fugly <- left_join(fugly, vacant_var, by = c("STATE_ID" = "STATE_ID.x"))
+fugly <- left_join(fugly, vacant_var, by = "STATE_ID")
 rm(vacant_var, vacant_join_buffy)
 
-print(paste0("vacant Join: ", as.character(sum(data.frame(table(fugly$STATE_ID.x))$Freq > 1))))
+print(paste0("vacant Join: ",  n_repeats(fugly, STATE_ID)))
 
 ```
 
@@ -307,7 +319,7 @@ school %<>%
   dplyr::select(-c(Shape_Leng, Shape_Length, Shape_Area))
 
 fugly <- st_join(st_centroid(fugly), school)
-print(paste0("school Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$Freq > 1))))
+print(paste0("school Join: ",  n_repeats(fugly, STATE_ID)))
 rm(school)
 
 # -----------------------------------------------------------------------------------------------------------
@@ -465,18 +477,20 @@ ftprints_pruned %<>%
   dplyr::group_by(STATE_ID) %>%
   dplyr::summarise(totalsqft = sum(BLDG_SQFT, na.rm = T),
             yearbuilt = mean(YEAR_BUILT, na.rm = T),
+            maxheight = max(AVG_HEIGHT, na.rm = T),
             avgheight = mean(AVG_HEIGHT, na.rm = T),
             surfelev = mean(SURF_ELEV, na.rm = T),
             minheight = mean(MIN_HEIGHT, na.rm = T),
-            maxheight = mean(MAX_HEIGHT, na.rm = T),
             volume = mean(VOLUME, na.rm = T),
             n_units = sum(UNITS_RES, na.rm = T),
             n_buildings = n()) 
 
+
+
 # Left join ftprints_pruned to fugly
 fugly <- left_join(fugly, ftprints_pruned, 
                by = "STATE_ID")
-print(paste0("feet Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$Freq > 1))))
+print(paste0("feet Join: ",  n_repeats(fugly, STATE_ID)))
 rm(ftprints_pruned)
 #-------------------------------------------------------------------------------
 # # check if these ids uniquely identify the building footprints
@@ -512,7 +526,9 @@ impsegcop_wide <- dcast(setDT(impsegcop_wide), PropID ~ SegmentType,
 # Left join impsegcop_wide to fugly
 fugly <- left_join(fugly, impsegcop_wide, 
                by = "PROPERTYID")
-print(paste0("fugly impsegcop Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$Freq > 1))))
+
+print(paste0("fugly impsegcop Join: ",n_repeats(fugly, STATE_ID)))
+
 rm(impsegcop_wide)
 #-------------------------------------------------------------------------------
 # dim(isc_pruned)
@@ -548,7 +564,7 @@ bath <- is_pruned %>%
   dplyr::ungroup()
 
 fugly <- left_join(fugly, bath, by = "PROPERTYID")
-print(paste0("fugly bath Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$Freq > 1))))
+print(paste0("fugly bath Join: ",  n_repeats(fugly, STATE_ID)))
 
 # Recode bathrooms 
 # Initialize columns: f.baths = total full baths, h.baths = total half baths
@@ -589,7 +605,7 @@ fire <- is_pruned %>%
   dplyr::rename(PROPERTYID = PropertyID)
 
 fugly <- left_join(fugly, fire, by = "PROPERTYID") 
-print(paste0("Fugly fire Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$Freq > 1))))
+print(paste0("Fugly fire Join: ",  n_repeats(fugly, STATE_ID)))
 
 
 # Recode fireplaces
@@ -635,8 +651,8 @@ ADU <- ADU[-c(1),]
 
 # join to dataframe 
 fugly <- left_join(fugly, ADU, by = "PROPERTYID")
-print(paste0("ADU Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$Freq > 1))))
-# rm(ADU)
+print(paste0("ADU Join: ",  n_repeats(fugly, STATE_ID)))
+rm(ADU)
 ```
 
 
@@ -665,7 +681,7 @@ canopy <- canopy %>%
 # should end up with 33387 observations
 
 fugly <- left_join(fugly, canopy, by = "STATE_ID")
-print(paste0("Canopy Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$Freq > 1))))
+print(paste0("Canopy Join: ", n_repeats(fugly, STATE_ID)))
 rm(canopy)
 ```
 
@@ -697,7 +713,7 @@ dumdum_constraints <- firstjoin %>%
   st_drop_geometry() 
 
 fugly <- left_join(fugly, dumdum_constraints, by = "STATE_ID")
-print(paste0("constraints Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$Freq > 1))))
+print(paste0("constraints Join: ", n_repeats(fugly, STATE_ID)))
 rm(firstjoin, dumdum_constraints, non_id_constraints)
 
 ```
@@ -775,23 +791,23 @@ rm(partial)
 ```{r}
 # Load zoning shape files
 zoningaug2014 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2014_Aug_pdx.shp")) %>% st_transform(2913)
+                              "Zoning_2014_Aug_pdx.shp"))
 zoningfeb2014 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2014_Feb_pdx.shp")) %>% st_transform(2913)
+                              "Zoning_2014_Feb_pdx.shp"))
 zoningaug2015 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2015_Aug_pdx.shp")) %>% st_transform(2913)
+                              "Zoning_2015_Aug_pdx.shp"))
 zoningfeb2015 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2015_Feb_pdx.shp")) %>% st_transform(2913)
+                              "Zoning_2015_Feb_pdx.shp"))
 zoningaug2016 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2016_Aug_pdx.shp")) %>% st_transform(2913)
+                              "Zoning_2016_Aug_pdx.shp"))
 zoningfeb2016 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2015_Feb_pdx.shp")) %>% st_transform(2913)
+                              "Zoning_2015_Feb_pdx.shp"))
 zoningaug2017 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2017_Aug_metro.shp")) %>% st_transform(2913)
+                              "Zoning_2017_Aug_metro.shp"))
 zoningaug2018 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2018_Aug_pdx.shp")) %>% st_transform(2913)
+                              "Zoning_2018_Aug_pdx.shp"))
 zoningfeb2018 <- st_read(here("DATA", "Zoning_History",
-                              "Zoning_2018_Feb_pdx.shp")) %>% st_transform(2913)
+                              "Zoning_2018_Feb_pdx.shp"))
 
 zonelist <- list(zoningaug2014 = zoningaug2014,
                  zoningaug2015 = zoningaug2015,
@@ -881,11 +897,13 @@ zones_over_time %<>%
   dplyr::select(-saledate)
 
 fugly <- left_join(fugly, zones_over_time, by = "STATE_ID")
-print(paste0("zone Join: ", as.character(sum(data.frame(table(fugly$STATE_ID))$Freq > 1))))
+print(paste0("zone Join: ", n_repeats(fugly, STATE_ID)))
 ```
 
 ## Export full data frame
 ```{R}
-#write.csv(df, here("DATA", "altered", "thesis-data.csv"))
+fugly %>%
+  select(-c(SHARED, Shape)) %>%
+  write.csv(., here("DATA", "altered", "thesis-data.csv"))
 ```
 
