@@ -12,20 +12,6 @@ library(here)
 
 # Load in cleaned data and define constraints + variables
 ```{r}
-sfr.dat <- read.csv(here("DATA", "altered", "sfr-cleaned.csv"))
-
-mfr.dat <- read.csv(here("DATA", "altered", "mfr-cleaned.csv"))
-
-mfr_vars <- c("dist_cityhall", "dist_ugb", "h_baths",
-              "f_baths", "AREA", "maxheight", "garage_dum","bsmt_dum", 
-              "pct_canopy_cov", "YEARBUILT", "CN_score", "attic_dum", "year_sold", "n_fireplaces",
-              "percent_vacant", "n_units", "n_buildings", "totalsqft", "I(totalsqft^2)", "I(AREA^2)", "I(f_baths^2)")
-
-sfr_vars <- c("dist_cityhall", "dist_ugb", "h_baths",
-              "f_baths", "AREA", "maxheight", "totalsqft", "garage_dum","bsmt_dum",
-              "pct_canopy_cov", "YEARBUILT", "n_fireplaces", "CN_score", "attic_dum", "year_sold", 
-              "percent_vacant", "I(AREA^2)", "I(totalsqft^2)", "I(CN_score^2)")
-
 constraints <- c("conWetland", "conAirHgt",
                     "conCovrly", "conPovrly",
                    "conHist", "conHistLdm", 
@@ -35,13 +21,29 @@ constraints <- c("conWetland", "conAirHgt",
                    "conTranInt", "conTranSub", "conWater", 
                  "conGW", "conPubOwn", "conFld100_ft", "conECSI")
 
+# ----------------------SFR------------------------------
+sfr.dat <- read.csv(here("DATA", "altered", "sfr-cleaned.csv"))
+sfr_vars <- c("dist_cityhall", "dist_ugb", "h_baths",
+              "f_baths", "AREA", "maxheight", "totalsqft", "garage_dum","bsmt_dum",
+              "pct_canopy_cov", "YEARBUILT", "n_fireplaces", "CN_score", "attic_dum", "year_sold", 
+              "percent_vacant", "I(AREA^2)", "I(totalsqft^2)", "I(CN_score^2)")
 collinearity.sfr <- c("conWetland", "conPrvCom")
+
+# -----------------------MFR-----------------------------
+mfr.dat <- read.csv(here("DATA", "altered", "mfr-cleaned.csv"))
+
+mfr_vars <- c("dist_cityhall", "dist_ugb", "h_baths",
+              "f_baths", "AREA", "maxheight", "garage_dum","bsmt_dum", 
+              "pct_canopy_cov", "YEARBUILT", "CN_score", "attic_dum", "year_sold", "n_fireplaces",
+              "percent_vacant", "n_units", "n_buildings", "totalsqft", "I(totalsqft^2)", "I(AREA^2)", "I(f_baths^2)")
+
 collinearity.mfr <- c("conWetland", "conPrvCom", "conPovrly", "conSewer", "conLUST")
 ```
 
 # Define functions
 ```{R}
-# input a vector of strings tht are the names of variables
+# input: a vector of strings tht are the names of variables
+# output: formula object with `lnprice` as dependent variable
 genFormula <- function(...){
   string <- paste(c(...), collapse = " + ")
   paste0("lnprice ~", string) %>% as.formula
@@ -59,11 +61,14 @@ genFormula <- function(...){
 #   table[indicies,]
 # }
 
+# remove transformations to variable names, output list of strings denoting
+# variables used in lm fitting
 pullVarname <- function(vars){
   sapply(vars, gsub, pattern = "\\(|\\)|I\\(|log|\\^2", replace = "") %>%
     unique()
 }
 
+# exchange code names for their descriptions in summary statistic tables
 getDesc <- function(vars){
     crosswalk <- data.frame(Description = 
                               c("Number of half baths", "Number of full baths", 
@@ -89,6 +94,7 @@ getDesc <- function(vars){
       filter(Variable %in% vars)
 }
 
+# make a pretty, customized summary table
 summaryTable <- function(data, vars){
   stopifnot(is.data.frame(data))
   require(magrittr)
@@ -137,9 +143,13 @@ summaryTable <- function(data, vars){
 #     column_spec(column = 1, width_min = "3cm")
 # }
 
+# To estimate all 6 models at once using various data and variables, 
+# outputs the results of the fits in a list of model objects
 estimateModels <- function(data, variables, dist.vars = "", collin = ""){
 
-  constraints <- setdiff(constraints, collin)
+  constraints <- setdiff(constraints, collin) # depending on property type some constraints
+  # were collinear
+  
   controls <- lm(genFormula(variables), data)
   nbhd <- lm(genFormula(setdiff(variables, dist.vars), "nbhd"), 
                    data)
@@ -154,11 +164,12 @@ estimateModels <- function(data, variables, dist.vars = "", collin = ""){
   list(controls, quad, nbhd, const, const.quad, const.nbhd)
 }
 
-makeSARtbl <- function(x){
-  summary(x)$Coef %>%
-  as.data.frame %>%
-  rownames_to_column(var = "Variable")
-}
+
+# makeSARtbl <- function(x){
+#   summary(x)$Coef %>%
+#   as.data.frame %>%
+#   rownames_to_column(var = "Variable")
+# }
 
 # addBrackets <- function(x){
 #   left <-  paste0("[", x)
@@ -192,6 +203,7 @@ makeSARtbl <- function(x){
 #     dplyr::rename_(.dots = setNames("Value", colname))
 # }
 
+# stylized modification of the stargazer function, to avoid lotsa repeated code
 my_reg_table  <- function(models = ..., title = "", omit, column.labels, 
                           fname, digits = 5){
   stargazer(models,
@@ -222,7 +234,7 @@ my_reg_table  <- function(models = ..., title = "", omit, column.labels,
 
 The tables produced below are saved in the github directory: Thesis/Ryan/figs/tables/html-tables. I use stargazer for ease of transferring into Word.
 
-## Constraint counts table
+## Constraint counts table (table 6)
 ```{r}
 mfr.counts <- mfr.dat %>% select(matches("con")) %>%
   colSums()
@@ -232,7 +244,7 @@ sfr.counts <- sfr.dat %>% select(matches("con")) %>%
 counts.tbl <- data.frame(sfr.counts, mfr.counts) 
 colnames(counts.tbl) <- c("SFR", "MFR")
 
-# export table to html file with stargazer
+# export counts table to html file with stargazer
 stargazer(counts.tbl, type = "html",
           title = "Number of Properties within Constraints",
           style = "io",
@@ -242,14 +254,8 @@ stargazer(counts.tbl, type = "html",
           summary = F)
 ```
 
-## Summary stats tables
+## Summary stats tables (tables 4, 5, 3)
 ```{R}
-# remove all the transformations to variables for ease of formatting/identifying
-pullVarname <- function(vars){
-  sapply(vars, gsub, pattern = "\\(|\\)|I\\(|log|\\^2", replace = "") %>%
-    unique()
-}
-
 # write sfr summary table to html file
 stargazer(summaryTable(sfr.dat, sfr_vars) %>% select(-Variable),
           type = "html",
@@ -286,7 +292,7 @@ stargazer(type = 'html',
                      "price-sum-stats.htm"))
 ```
 
-## VIF tables
+## VIF tables (not included)
 Note that these tables don't appear in the body of the thesis document, but were used to diagnose multicollinearity problems and discussed in my Results and Model Diagnostics sections.
 
 They are saved with the rest of the tables in the folder html-tables.
@@ -348,7 +354,7 @@ car::vif(sfr_mods[[6]]) %>% as.data.frame() %>%
 5) Use function `my_reg_table()`, my variant of `stargazer()` with specific formatting options selected (i.e. star/significance levels, heading labels, etc) to avoid copy pasting long sections of code. Export 3 html tables for each property type: coefficients of control variables, constraint variables, and full regression results.
 
 
-### SFR
+### SFR (tables 7, 8, B.1)
 ```{r}
 model_labels <- c("Baseline", "Quadrant FE", "Neighborhood FE", 
                        "Baseline + constraints", "Quadrant FE + constraints", 
@@ -372,7 +378,7 @@ sfr_mods[[7]] <- re_sfr
 # control vars
 my_reg_table(sfr_mods, title = "SFR Results: Controls", 
              omit = c("nbhd", "sextant", constraints), column.labels = model_labels, 
-                          "sfr-results-controls.htm", digits = 5)
+                          "sfr-results-controls-copy.htm", digits = 5)
 
 # constraint vars
 my_reg_table(sfr_mods[4:7], title = "SFR Results: Constraints",
@@ -385,7 +391,7 @@ my_reg_table(sfr_mods, title = "Single-family Residential Full Results",
              "sfr-full-results.htm", digits = 5)          
 ```
 
-### MFR
+### MFR (tables 9, 10, B.2)
 ```{r}
 mfr_mods <- estimateModels(mfr.dat, mfr_vars, 
                            collin = collinearity.mfr)
@@ -420,10 +426,10 @@ my_reg_table(mfr_mods, title = "MFR Full Results",
 
 \newpage
 
-# Figures
+# Constructing Figures
 The figures below are included in the thesis document.
 
-## QQ-plots of best SFR and MFR model
+## QQ-plots of best SFR and MFR model (fig 11)
 ```{R}
 # single
 plot(sfr_mods[[6]], 2, sub.caption = NA, 
@@ -434,7 +440,7 @@ plot(mfr_mods[[5]], 2, sub.caption = NA,
      caption = rep("MFR FE model (6): Normal Q-Q", 6))
 ```
 
-## Histogram of property values by property type
+## Distribution of Sale Price (fig 8)
 ```{R}
 ggplot(sfr.dat, aes(lnprice)) + geom_histogram() + 
   theme(axis.text.y = element_blank(),
@@ -457,7 +463,7 @@ ggsave(here("Ryan", "figs", "plots", "sfr-totsqft.png"))
 
 ```
 
-## SFR non-linearity scatterplots
+## SFR non-linearity scatterplots (figs 6, 10)
 ```{r}
 # sfr totalsqft, quadratic relationship
 ggplot(sfr.dat, aes(totalsqft, lnprice)) + geom_point() + geom_smooth() +
@@ -486,7 +492,7 @@ ggsave(here("Ryan", "figs", "plots", "mfr-cnscore.png"))
 
 ```
 
-## MFR building squarefootage imputation scatterplot
+## MFR building squarefootage imputation scatterplot (not included)
 ```{R}
 ggplot(mfr.dat, aes(bldgsqft_imp, lnprice, color = imputed)) + 
   geom_point(alpha = .5) +
