@@ -139,7 +139,7 @@ walk %<>%
 # renaming things and later confusion
 # Join!
 fugly <- sf::st_join(st_centroid(taxlots_pruned), walk)
-paste0("walkscore Join: ", n_repeats(fugly, STATE_ID))) %>% print()
+paste0("walkscore Join: ", n_repeats(fugly, STATE_ID)) %>% print()
 
 ```
 
@@ -271,7 +271,11 @@ vacancy_pruned <- taxlots %>%
   filter(n == 1) 
 
 # create vacant column
-vacancy_pruned$VACANT <- vacancy_pruned$PRPCD_DESC == "VACANT LAND"
+vacancy_pruned %<>% 
+  mutate(VACANT = case_when(PRPCD_DESC == "VACANT LAND" ~ 1,
+                            TRUE ~ 0))
+    
+#    $VACANT <- vacancy_pruned$PRPCD_DESC == "VACANT LAND"
 
 # creates a buffer called buffer_dist
 # adds this buffer as an additional geometry to the main dataset
@@ -412,7 +416,7 @@ rm(cityhall)
 ### Distance to Urban Growth Boundary!!!!
 
 This approach calculates distances using the centroids of MULTIPOLYGON taxlots. So, in the process, the st_geometry() attribute of the taxlot spatial data frame is changed from polygons to points. But the geometry can be reset to MULTIPOLYGONS afterward.
-```{r}
+```{r, warning=FALSE}
 
 # Transform UGB shapefile
 ugb %<>% 
