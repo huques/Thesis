@@ -16,7 +16,7 @@ library(magrittr)
 
 # Import joined thesis data
 ```{r}
-df <- read.csv(here("DATA", "altered", "thesis-data_4-25.csv"))
+df <- read.csv(here("DATA", "altered", "thesis-data.csv"))
 
 constraints <- c("conAirHgt",
                     "conCovrly", "conPovrly",
@@ -39,6 +39,7 @@ df %<>%
   mutate(n_fireplaces = ifelse(is.na(n_fireplaces), 0, n_fireplaces), 
          saledate = as.Date(saledate),
          lnprice = log(SALEPRICE),
+         maxheight = ifelse(maxheight < 0, NA, maxheight),
          # define flags
          proud_flag =  grepl("PROUD", OWNER1) | 
            grepl("PROUD", OWNER2) | grepl("PROUD", OWNER3),
@@ -50,10 +51,10 @@ df %<>%
          price_ratio = SALEPRICE/LANDVAL3 * 100,         
          #make percentages
          pct_canopy_cov = 100*pct_canopy_cov,
-         percent_vacant = 100*percent_vacant)
+         percent_vacant = 100*percent_vacant) %>%
+  rename(nbhd = NAME)
 
 #export to csv
-#write.csv(df, here("DATA", "altered", "thesis-data_4-25.csv"))
 ```
 
 
@@ -63,7 +64,8 @@ df %<>%
 • `trim`: 31,388
 
 ```{r}
-df <- read.csv(here("DATA", "altered", "thesis-data_4-25.csv"))
+#df <- read.csv(here("DATA", "altered", "thesis-data.csv"))
+df$saledate <- as.Date(as.character(df$SALEDATE), "%m/%d/%Y")
 
 # MAKE DROPS
 trim <- df %>% 
@@ -116,7 +118,7 @@ trim %<>%
 • `sfr.dat`: 24,715
 
 (drop missing variables used for regression, missing at random?)
-• `sfr.dat.cleaned`: 22,438
+• `sfr.dat.cleaned`: 22,433
 
 ```{r}
 sfr_vars <- c("dist_cityhall", "dist_ugb", "h_baths",
@@ -134,13 +136,14 @@ sfr.dat <- trim %>%
     filter(!empty_lot_flag,
          !maybe_mfr_flag, 
          !big_area_flag,
-         !big_sqft_flag)
+         !big_sqft_flag,
+         !big_bsmt_flag)
 
 sfr.dat.cleaned <- sfr.dat %>%
   select(pullVarname(sfr_vars), constraints, STATE_ID, 
          BLDGSQFT, lnprice, nbhd, sextant) %>%
   drop_na()
-
+dim(sfr.dat.cleaned)
 #write.csv(sfr.dat.cleaned, here("DATA", "altered", "sfr-cleaned.csv"))
 ```
 
@@ -148,7 +151,7 @@ sfr.dat.cleaned <- sfr.dat %>%
 • `mfr.dat`: 4,187
 (drop missing variables used for regression, missing at random?)
 
-• `mfr.dat.cleaned`: 
+• `mfr.dat.cleaned`: 3,102
 ```{r}
 mfr_vars <- c("dist_cityhall", "dist_ugb", "h_baths",
               "f_baths", "AREA", "maxheight", "garage_dum","bsmt_dum", 
@@ -170,8 +173,9 @@ mfr.dat.cleaned <- mfr.dat %>%
   select(pullVarname(mfr_vars), constraints, STATE_ID, 
          BLDGSQFT, lnprice, nbhd, sextant) %>%
   drop_na()
+dim(mfr.dat.cleaned)
 
-# write.csv(mfr.dat, here("DATA", "altered", "mfr-cleaned.csv"))
+#write.csv(mfr.dat, here("DATA", "altered", "mfr-cleaned.csv"))
 
 ```
 
