@@ -1,14 +1,29 @@
-# k-fold cross validating m1 and m2
+# K-fold cross validation for best SFR and MFR models...
+   # SFR: neighborhood FE
+   # MFR: quadrant FE
 
-# load the library
+#-------------------------- OVERVIEW -----------------------------
+# The idea with this script is to give another metric of fit to assess the 6 models for each
+# property type using  test mean squared error (MSE). Tegression diagnostics - R squared adjusted,
+# AIC, BIC, df, etc, are different flavors that get at training error, which tells us how well
+# the model performs on the given data. Training MSE necessarily decreases with the number
+# of variables used to fit the model, but at some point extra, uninformative variables
+# are harmful and the model performs worse (there is increased variance). 
+
+# To approximate test MSE, which is a measure of how well the model predicts house prices 
+# of observations that were not used to fit it, I use 5-fold cross validation. This shuffles the data,
+# splits it into 5 groups. Then for each group, use the 4 other groups
+# to fit the model (ie. to generate coefficients/best fit parameters), 
+# then use the remaining group (test set) to evaluate the MSE. 
+#------------------------------------------------------------------
+
+# load the cv library
 library(caret)
 
 n <- colnames(sfr.dat)[colnames(sfr.dat) %in% colnames(m$model)]
 
-# define new df with nas removed
-sfr.dat.na <- sfr.dat %>%
-  select(STATE_ID, n) %>%
-  na.omit()
+sfr.dat <- read.csv(here("DATA", "altered", "sfr-cleaned.csv"))
+mfr.dat <- read.csv(here("DATA", "altered", "mfr-cleaned.csv"))
 
 # define training control
 train_control <- trainControl(method="cv", number=5)
@@ -55,12 +70,47 @@ mfr.dat.na2 <- mfr.dat %>%
 f1 <- genFormula(control_vars, constraints)
 f2 <- genFormula(control_vars, constraints, "nbhd")
 
+# define training control
+train_control <- trainControl(method="cv", number=5)
 
-model1 <- train(f1, data=mfr.dat.na1, trControl=train_control, method="lm")
-model2 <- train(f2, data=mfr.dat.na2, trControl=train_control, method="lm")
+model1 <- train(genFormula(mfr_vars, constraints), 
+                data=mfr.dat, trControl=train_control, method="lm")
+model2 <- train(genFormula(mfr_vars, constraints, "nbhd"), 
+                data=mfr.dat, trControl=train_control, method="lm")
 
 print(model1)
 print(model2)
 
+# -------------------- 4/30 update----------------------------
+cv.mfr.quad <- train(genFormula(mfr_vars, "sextant", setdiff(constraints, collinearity.mfr)), 
+                data=mfr.dat, trControl=train_control, method="lm")
+
+cv.mfr.nbhd <- train(genFormula(mfr_vars, "nbhd", setdiff(constraints, collinearity.mfr)), 
+                     data=mfr.dat, trControl=train_control, method="lm")
+
+cv.mfr.nofe <- train(genFormula(mfr_vars, setdiff(constraints, collinearity.mfr)), 
+                data=mfr.dat, trControl=train_control, method="lm")
+
+cv.mfr.nofe
+cv.mfr.quad
+cv.mfr.nbhd
+
+
+cv.sfr.quad <- train(genFormula(sfr_vars, "sextant", setdiff(constraints, collinearity.sfr)), 
+                     data=sfr.dat, trControl=train_control, method="lm")
+
+cv.sfr.nbhd <- train(genFormula(sfr_vars, "nbhd", setdiff(constraints, collinearity.sfr)), 
+                     data=sfr.dat, trControl=train_control, method="lm")
+
+cv.sfr.nofe <- train(genFormula(sfr_vars, setdiff(constraints, collinearity.sfr)), 
+                     data=sfr.dat, trControl=train_control, method="lm")
+
+cv.sfr.re <- train(genFormula(sfr_vars, setdiff(constraints, collinearity.sfr)), 
+                   data=sfr.dat, trControl=train_control, method="lme")
+
+
+cv.sfr.nofe
+cv.sfr.quad
+cv.sfr.nbhd
 
 
