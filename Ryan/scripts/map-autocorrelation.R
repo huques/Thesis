@@ -1,115 +1,199 @@
-# make spatial dependency maps
+library(sf)
+library(tidyverse)
+library(here)
+library(magrittr)
 
-m <- FEmodel(sfr.dat)
-length(m$residuals) # how to connect residuals back in order to map??
-sm <- summary(m)
-sm
-fe.estimates <- sm$coefficients[,1]
-#cooks.distance(m) %>% sort(decreasing = T)
+#------ NBHD RESIDUAL MAPS FROM FINAL MODELS --------
 
-# detecting leverage using fitted values vs ys
-yhat <- m$fitted.values
-dim(sfr.dat)
+# load neighborhood geometries & cleaned data frames
+nbhd <- st_read(here::here("DATA", "data_20191112.gdb"), 
+                "neighborhoods_no_overlap")
+sfr.dat <- read.csv(here("DATA", "altered", "sfr-cleaned.csv"))
+mfr.dat <- read.csv(here("DATA", "altered", "mfr-cleaned.csv"))
 
-n <- colnames(sfr.dat)[colnames(sfr.dat) %in% colnames(m$model)]
+# join geometry to sfr data frame
+sfr.dat.geom <- left_join(nbhd, sfr.dat, by = c("NAME" = "nbhd")) %>%
+  group_by(STATE_ID) %>%
+  slice(1) %>%
+  filter(!is.na(STATE_ID)) %>%
+  ungroup()
 
-# get the ys 
-ys <- sfr.dat %>%
-  select(STATE_ID, n) %>%
-  na.omit() %>%
-  select(STATE_ID, lnprice) 
+mfr.dat.geom <- left_join(nbhd, mfr.dat, by = c("NAME" = "nbhd")) %>%
+  group_by(STATE_ID) %>%
+  slice(1) %>%
+  filter(!is.na(STATE_ID)) %>%
+  ungroup()
 
-ys$lnprice - yhat - m$residuals < 0.0001 # yay the resids are same as ys - yhat
+# make data frame with mean residuals across nbhd, quadrant and no fixed effects model
+sfr.nbhd.resid <- sfr.dat.geom %>%
+  mutate(fe = sfr_mods[[6]]$residuals,
+         quad = sfr_mods[[4]]$residuals,
+         nofe = sfr_mods[[2]]$residuals) %>%
+  group_by(NAME) %>%
+  summarize(mean.fe = mean(fe, na.rm = T),
+            mean.quad = mean(quad, na.rm = T),
+            mean.nofe = mean(nofe, na.rm = T))
 
-# join state_id geometries to ys df
+mfr.nbhd.resid <- mfr.dat.geom %>%
+  mutate(fe = mfr_mods[[6]]$residuals,
+         quad = mfr_mods[[4]]$residuals,
+         nofe = mfr_mods[[2]]$residuals) %>%
+  group_by(NAME) %>%
+  summarize(mean.fe = mean(fe, na.rm = T),
+            mean.quad = mean(quad, na.rm = T),
+            mean.nofe = mean(nofe, na.rm = T))
 
-st_geometry(ys) <- taxlots_pruned %>% # add buffer to visualize color better
-  filter(STATE_ID %in% ys$STATE_ID) %>%
-  st_buffer(dist = 400) %>%
-  st_geometry()
+# make sfr residual maps - FE v. no FE
+mapview::mapview(sfr.nbhd.resid, alpha.regions = 0.5, zcol = "mean.fe") # fig 13
+mapview::mapview(sfr.nbhd.resid, alpha.regions = 0.5, zcol = "mean.nofe") # fig 13
 
-N <- length(m$residuals)
-ys %<>%
-  mutate(resid = m$residuals,
-         price = taxlots_pruned %>% 
-           filter(STATE_ID %in% ys$STATE_ID) %>%
-           pull(SALEPRICE),
-         norm = rnorm(n = N, mean = mean(m$residuals),
-                      sd = sd(m$residuals)))
-
-my.palette <- brewer.pal(n = 5, name = "PuOr")
-
-#1
-ys %>% mapview(zcol = "resid", col.regions = my.palette)
-#2
-ys %>% mapview(zcol = "lnprice")
-#3
-ys %>% mapview(zcol = "norm", col.regions = my.palette)
-
-#4
-ys %>% mapview(zcol = "resid")
-#5
-ys %>% mapview(zcol = "lnprice")
-
-
-# --------------- no fixed effects model ----------
-
-n <- colnames(sfr.dat)[colnames(sfr.dat) %in% colnames(no_fe_c$model)]
-
-# get the ys 
-ys_m1 <- sfr.dat %>%
-  select(STATE_ID, n) %>%
-  na.omit() %>%
-  select(STATE_ID, lnprice) 
-yhat <- no_fe_c$fitted.values
-ys_m1$lnprice - yhat - no_fe_c$residuals < 0.0001 # yay the resids are same as ys - yhat
+# mfr residual maps
+mapview::mapview(mfr.nbhd.resid, alpha.regions = 0.5, zcol = "mean.fe")
+mapview::mapview(mfr.nbhd.resid, alpha.regions = 0.5, zcol = "mean.quad")
+mapview::mapview(mfr.nbhd.resid, alpha.regions = 0.5, zcol = "mean.nofe")
 
 
-N <- length(no_fe_c$residuals)
-ys_m1 %<>%
-  mutate(resid = no_fe_c$residuals,
-         price = taxlots_pruned %>% 
-           filter(STATE_ID %in% ys_m1$STATE_ID) %>%
-           pull(SALEPRICE),
-         norm = rnorm(n = N, mean = mean(no_fe_c$residuals),
-                      sd = sd(no_fe_c$residuals)))
+#----------------------- CONSTRAINT MAPS -------------------
+# First, reattach taxlot geometries 
 
-st_geometry(ys_m1) <- taxlots_pruned %>% # add buffer to visualize color better
-  filter(STATE_ID %in% ys_m1$STATE_ID) %>%
-  st_buffer(dist = 400) %>%
-  st_geometry()
+# 1. load taxlot geometries and non-spatial cleaned data frames
+taxlots <- st_read(here::here("DATA", "data1.gdb"), "taxlots_20191010")
+sfr.dat <- read.csv(here("DATA", "altered", "sfr-cleaned.csv"))
+mfr.dat <- read.csv(here("DATA", "altered", "mfr-cleaned.csv"))
 
-# check if errors in m1, no FE exhibit pattern: they seem to! So the FE help
-#6
-ys_m1 %>% mapview(zcol = "resid")
+# 2. pivot constraints longer to use contraint as a color/fill aspect with ggplot2
+sfr.trim <- sfr.dat %>% 
+  select(constraints, STATE_ID, nbhd) %>%
+  filter_if(is.numeric, any_vars(. == 1)) %>% 
+  pivot_longer(cols = c(1:22), names_to = "Constraint") %>%
+  filter(value == 1) 
+
+# 3. trim taxlot geometries down to those from the cleaned data frame
+taxlots_sfr <- taxlots %>%
+  filter(STATE_ID %in% unique(sfr.trim$STATE_ID)) %>%
+  select(STATE_ID)
+
+# 4. join geometries to the SFR data frame & add buffer for visibility
+sfr.dat.geom <- left_join(taxlots_sfr, sfr.trim, by = "STATE_ID") %>% 
+  st_centroid() %>%
+  st_buffer(dist = 200) 
+
+# 5. RINSE & REPEAT STEPS 1-4 FOR MFR
+mfr.trim <- mfr.dat %>% 
+  select(constraints, STATE_ID) %>%
+  filter_if(is.numeric, any_vars(. == 1)) %>% 
+  pivot_longer(cols = c(1:22), names_to = "Constraint") %>%
+  filter(value == 1) 
+
+taxlots_mfr <- taxlots %>%
+  filter(STATE_ID %in% unique(mfr.trim$STATE_ID)) %>%
+  select(STATE_ID)
+
+mfr.dat.geom <- left_join(taxlots_mfr, mfr.trim, by = "STATE_ID") %>% 
+  st_centroid() %>%
+  st_buffer(dist = 400) 
+
+#------------------------ SET A: CONSTRAINT COUNTS -----------------------------------
+# Define mapping function to plot locations/points of constrained properties
+
+# Inputs - 
+    # index: restrict index of constraints (because 27 is too many for 1 map)
+    # option: choose color scheme
+map_this <- function(option = "D", index, data = sfr.dat.geom){
+  ggplot() +  geom_sf(data = nbhd, alpha = 0, lwd = .3) +
+    geom_sf(data = data %>% filter(Constraint %in% constraints[index]), 
+            aes(fill = Constraint), lwd = 0, alpha = .8) + 
+  scale_fill_viridis_d(option = option) +
+  theme(axis.ticks.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text.x = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        panel.grid.major = element_line(colour = "grey92")) 
+}
+
+# make the SFR maps
+conmap1 <- map_this("inferno", 1:5)
+conmap2 <- map_this("magma", 6:10) 
+conmap3 <- map_this("cividis", index = 11:15)
+conmap4 <- map_this("inferno", index = 16:20)
+
+# call and save the maps
+conmap1
+ggsave(here("Ryan", "figs", "maps", "conmap1.png")) # fig A.1
+conmap2
+ggsave(here("Ryan", "figs", "maps", "conmap2.png")) # fig A.2
+conmap3
+ggsave(here("Ryan", "figs", "maps", "conmap3.png")) # fig A.3
+conmap4
+ggsave(here("Ryan", "figs", "maps", "conmap4.png")) # fig A.4
 
 
-# see if aligns with neighbors
-nbhd.prices <- sfr.dat.na %>%
-  mutate(resid.fe = m$residuals,
-         resid.nofe = no_fe_c$residuals[which(sfr.dat.na$STATE_ID %in% ys_m1$STATE_ID)]) %>%
+conmap1.mfr <- map_this("D", 1:5, data = mfr.dat.geom)
+conmap1.mfr
+conmap2.mfr <- map_this("magma", 6:10, mfr.dat.geom) 
+conmap3.mfr <- map_this("cividis", index = 11:15, mfr.dat.geom)
+conmapfull.mfr <- map_this("inferno", index = 1:20, mfr.dat.geom)
+conmap2.mfr
+conmapfull.mfr
+
+
+#----------------------- SET B: CONSTRAINT PROPORTIONS -------------------------------
+# Make proportion of properties constrained in a NEIGHBORHOOD and in a QUADRANT
+
+# what proportion of properties are constrained in each neighborhood?
+props = left_join(nbhd %>% select(NAME), 
+                  sfr.dat %>% 
+  select(constraints, STATE_ID, nbhd) %>%
   group_by(nbhd) %>%
-  summarize(price = mean(lnprice, na.rm = T),
-            resid.fe = mean(resid.fe, na.rm = T),
-            resid.nofe = mean(resid.nofe, na.rm = T))
+  summarize_if(is.numeric, mean), by = c("NAME" = "nbhd")) 
 
+# bring in quadrants geometry
+sex <- here("DATA", "Portland_Administrative_Sextants",
+            "Portland_Administrative_Sextants.shp") %>% 
+  sf::st_read() %>%
+  st_transform(2913)
 
-nbhd.copy <- left_join(nbhd, nbhd.prices, by = c("NAME" = "nbhd")) 
+# join sextant geometries and the sfr data frame, save in new df 
+props_sex = left_join(sex %>% select(PREFIX), 
+                  sfr.dat %>% 
+                    select(constraints, STATE_ID, sextant) %>%
+                    group_by(sextant) %>%
+                    summarize_if(is.numeric, mean), by = c("PREFIX" = "sextant")) 
 
+# write function that takes either props or props_sex dfs and plots the 
+# proportion of each neighborhood or quadrant that are constrained
+# Input - 
+     # constraint: choose constraint to plot (can do only one at a time)
+     # props: choose reshaped data frame (neighborhoods = props, or sextants = props_sex)
+propConstrainedMap <- function(constraint, props = props){
+  constraint <- enquo(constraint)
+  ggplot() + 
+    geom_sf(data = props, aes(fill = !!constraint), lwd = .4, alpha = .8) + 
+    scale_fill_viridis_c() + theme_bw()
+}
 
-#map both layers
-props.map <- ys %>% mapview(zcol = "lnprice")
-nbhd.boundaries <- nbhd.copy %>% mapview(alpha.regions = 0.1)
-nbhd.map.price <- nbhd.copy %>% mapview(alpha.regions = 0.5, zcol = "price")
-nbhd.map.resid.fe <- nbhd.copy %>% mapview(alpha.regions = 0.5, zcol = "resid.fe")
-nbhd.map.resid.nofe <- nbhd.copy %>% mapview(alpha.regions = 0.5, zcol = "resid.nofe")
+# call and save maps
+propConstrainedMap(conAirHgt)
+ggsave(here("Ryan", "figs", "maps", "prop-AirHgt.png"))
 
-fe.prices <- ys %>% sample_n(1000) %>% mapview(zcol = "lnprice")
+propConstrainedMap(conHist)
+ggsave(here("Ryan", "figs", "maps", "prop-Hist.png"))
 
-nbhd.map.resid.fe
-nbhd.map.resid.nofe # can see more spatial clusterin in this map than in the FE one
+propConstrainedMap(conSLIDO)
+ggsave(here("Ryan", "figs", "maps", "prop-SLIDO.png"))
 
-nbhd.boundaries + fe.prices
+propConstrainedMap(conTranCap)
+ggsave(here("Ryan", "figs", "maps", "prop-trancap.png"))
+
+propConstrainedMap(conStorm)
+ggsave(here("Ryan", "figs", "maps", "prop-storm.png"))
+
+propConstrainedMap(conLSHA)
+ggsave(here("Ryan", "figs", "maps", "prop-LSHA.png")) # fig 9
+
+propConstrainedMap(conLSHA, props = props_sex)
+ggsave(here("Ryan", "figs", "maps", "prop-LSHA-quad.png")) # fig 9
 
 
 
