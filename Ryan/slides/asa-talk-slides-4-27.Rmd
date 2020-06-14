@@ -1,0 +1,42 @@
+---
+title: "Land Valuation in PDX"
+author: Advisors - Kelly McConville, Noelwah Netusil
+output: beamer_presentation
+---
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(message = FALSE, fig.align = "center")
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(knitr)
+```
+
+
+---
+
+![Spatial lag](figs/maps/spatial-lag.png "Spatial lag")
+
+
+
+
+---
+
+
+
+![Residual map no spatial dummies](figs/maps/resid-no-fe-map.png "Residual map - no FE")
+ 
+
+
+---
+
+
+![Residual map with spatial dummies](figs/maps/resid-fe-map.png "Residual map - FE")
+
+- This looks better, but is there still evidence of correlation?
+
+
+
+---
+
+
