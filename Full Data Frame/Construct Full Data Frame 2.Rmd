@@ -274,8 +274,6 @@ vacancy_pruned <- taxlots %>%
 vacancy_pruned %<>% 
   mutate(VACANT = case_when(PRPCD_DESC == "VACANT LAND" ~ 1,
                             TRUE ~ 0))
-    
-#    $VACANT <- vacancy_pruned$PRPCD_DESC == "VACANT LAND"
 
 # creates a buffer called buffer_dist
 # adds this buffer as an additional geometry to the main dataset
@@ -908,6 +906,6 @@ print(paste0("zone Join: ", n_repeats(fugly, STATE_ID)))
 ```{R}
 fugly %>%
   select(-c(SHARED, Shape)) %>%
-  write.csv(., here("DATA", "altered", "thesis-data.csv"))
+  write.csv(., here("DATA", "thesis-data.csv"))
 ```
 
