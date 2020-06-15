@@ -6,21 +6,21 @@
 This project is part of a year-long thesis in consultation with Noelwah Netusil at Reed College and the Bureau of Planning and Sustainability. 
 
 #### Abstract: 
- Our goal in amassing this data is to provide a quantitative tool that allows us to isolate the influence of environmental constraints (i.e. location within a 100-year floodplain, locating within a historic district, etc.) on the sale price of properties that have transacted within Multnomah county in the last five years. This document lays out the methodology used to develop our data set starting from the source of our raw files to the data frame used to estimate a hedonic price function. 
+ Our goal is to amassing a single data frame from several separate sources. With this data frame, we will calculate the marginal influence of environmental constraints (i.e. location within a 100-year floodplain, locating within a historic district, etc.) on the sale price of properties that have transacted within Multnomah county in the last five years. This document lays out the methodology used to develop our data set starting from the source of our raw files to the data frame used to estimate a hedonic price function. 
 
 ### Creators: 
 Salma Huque - Reed College '20, 
 
-Nick Kobel - Data Analyst at Bureau of Planning and Sustainability, 
-
 Ryan Kobler - Reed College '20
 
-### Identifer: 
+Nick Kobel - Data Analyst at Bureau of Planning and Sustainability, 
+
+### Identifers: 
 PROPERTYID
 STATE_ID
 
 ### Date:
-1. Received 10/10/2019 via USB -> DATA/data1.gdb
+1. [Received 10/10/2019 via USB -> DATA/data1.gdb](#DATA/data1.gdb)
 2. Received 10/29/2019 via email -> DATA/data2.gdb
 3. Received 11/21/2019 via email -> DATA/data-20191112.gdb
 4. Received 11/22/2019 via email -> DATA/tree_canopy.gdb and DATA/Zoning_History
@@ -53,7 +53,7 @@ To create DATA/DATA/ft_fld.gdb, "ft_floodplain" layer...
 # Raw Data Directory
 Each of these databases are saved in a directory called "DATA" on each of our machines. The bullet points represent layers included in the larger geodatabase. 
 
-#### data1.gdb  
+#### data1.gdb <a name="DATA/data1.gdb"></a>  
 - footprints = "footprints_10102019" 
 - taxlots = "taxlots_10102019"
   - Description: This comprises our unit of observation, if an observation is not included in this data frame, then it is not included in the analysis. All other data frames and attributes are left-joined here.
