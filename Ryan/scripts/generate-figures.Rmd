@@ -410,14 +410,14 @@ mfr_mods[[7]] <- re_mfr
 my_reg_table(mfr_mods, title = "MFR Results: Controls",
              column.labels = model_labels,
              omit = c("nbhd", "sextant", constraints),
-             fname = "mfr-results-controls-copy.htm")
+             fname = "mfr-results-controls.htm")
 
 # constraint vars
 my_reg_table(mfr_mods[4:7], title = "MFR Results: Constraints",
              column.labels = c(model_labels[1:3], 
                                "Neighborhood RE"),
              omit = c("nbhd", "sextant", mfr_vars),
-             fname = "mfr-results-constraints-copy.htm")
+             fname = "mfr-results-constraints.htm")
 
 # all vars
 my_reg_table(mfr_mods, title = "MFR Full Results",

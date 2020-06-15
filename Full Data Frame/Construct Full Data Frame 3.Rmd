@@ -44,7 +44,6 @@ library(tidyverse)
 ```{r}
 # GDB sent 10/29 via email
 gdb <- here::here("DATA", "data2.gdb")
-capacity <- st_read(gdb, layer = "bli_development_capacity")
 impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
 gisimpcop <- st_read(gdb, layer = "CoP_GISImprovement")
 impseg <- st_read(gdb, layer = "imp_segments")
@@ -106,8 +105,9 @@ walk <- st_read(walk_gdb,
 intersectionz <- st_read(here::here("DATA", "constraint_layers.gdb"),
                          "Intersectionz")
 
-# Source: done in GIS using FEMA map + footprints
-ftfld_ids <- st_read(here("DATA", "ft_fld.gdb"), 
+# Source: GDB created in GIS using FEMA map + building footprints: 
+# FEMA map - https://www.portlandmaps.com/arcgis/rest/services/Public/Hazard/MapServer/1
+ftfld_ids <- st_read(here("DATA", "ft_fld.gdb"),
                      layer = "ft_floodplain")
 
 # Source: https://gis-pdx.opendata.arcgis.com/datasets/portland-administrative-sextants
@@ -160,7 +160,7 @@ n_repeats <- function(data, id_var){
 # Transform crs from 4326 to 2913
 walk %<>% 
   st_transform(2913) %>%
-  dplyr::select(CN_score) 
+  dplyr::select(CN_score) # note that we're dropping all other variables that came with this df
 
 # join to dataframe
 fugly <- sf::st_join(st_centroid(taxlots_pruned), walk)
@@ -172,7 +172,7 @@ paste0("walkscore Join: ", n_repeats(fugly, STATE_ID)) %>% print()
 
 ```{r}
 nbhd %<>% 
-  dplyr::select(-c(OBJECTID, Shape_Leng, Shape_Length, Shape_Area))
+  dplyr::select(NAME)
 
 # join to dataframe
 fugly <- st_join(st_centroid(fugly), nbhd)

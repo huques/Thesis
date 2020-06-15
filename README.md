@@ -16,37 +16,72 @@ Nick Kobel - Data Analyst at Bureau of Planning and Sustainability,
 Ryan Kobler - Reed College '20
 
 ### Identifer: 
-PropertyID
-StateID
+PROPERTYID
+STATE_ID
 
 ### Date:
-- First data grab 10/10/2019 -> DATA/data1.gdb
-- Second data grab 10/29/2019 -> DATA/data2.gdb
-- Third data grab 11/21/2019 -> DATA/data-20191112.gdb
-- Fourth data grab 11/22/2019 -> DATA/tree_canopy.gdb
+1. Received 10/10/2019 via USB -> DATA/data1.gdb
+2. Received 10/29/2019 via email -> DATA/data2.gdb
+3. Received 11/21/2019 via email -> DATA/data-20191112.gdb
+4. Received 11/22/2019 via email -> DATA/tree_canopy.gdb and DATA/Zoning_History
+5. Received 11/25/2019 -> DATA/ugb/ugb.shp
+6. Received 2/04/2020 -> DATA/zoning_crosswalk.xlsx
+7. **Created 2/10/2020 in GIS -> DATA/canopy_20200210.gdb
+8. *Retrieved 2/11/2020 via OpenData.com -> DATA/Complete_Neighborhoods_Scoring_Surface
+9. **Created 2/13/2020 in GIS -> DATA/constraint_layers.gdb
+10. **Created 3/7/2020 in GIS using FEMA map (OpenData, link broken?) and 'building_footprints_20191010' layer (data1.gdb) -> DATA/ft_fld.gdb
+11. *Retrieved 4/2/2020 via OpenData.com -> DATA/Portland_Administrative_Sextants/Portland_Administrative_Sextants.shp
 
 ### Method:
-- Shapefile generation:
-  - Shapefiles: generated 
-  - Queried from relational database at BPS and sent to us via email and USB
+- Queried from relational database at BPS and sent to us via email and USB
+- *Retrieved separately from OpenData.com (not received in consultation with BPS).
+- **Created by Ryan Kobler and Salma Huque using GIS Intersect tool, methods given below
+
+To create DATA/canopy_20200210.gdb, "canopy_taxlot_intersect" layer...
+    1. Loaded 'taxlots_20191010' layer from data1.gdb into new ArcMap file
+    2. Loaded 'canopy_class_2014_metro' layer from tree_canopy.gdb
+    3. Used intersect tool to intersect the above layers
+    4. Exported intersected layer from ArcGIS to Shapefile
+
+To create DATA/DATA/ft_fld.gdb, "ft_floodplain" layer...
+    1. Loaded 'building_footprints_20191010' layer from data1.gdb into new ArcMap file
+    2. Loaded 'FEMA' 100 year floodplain layer from OpenData.com, source: 
+    3. Used intersect tool to intersect the above layers
+    4. Exported intersected layer from ArcGIS to Shapefile
   
 ***
 # Raw Data Directory
-Each of these databases are saved in a directory called "DATA" on each of our machines.
+Each of these databases are saved in a directory called "DATA" on each of our machines. The bullet points represent layers included in the larger geodatabase. 
 
-#### data1.gdb layers (retrieved via USB on 10/10/2019)
+#### data1.gdb  
 - footprints = "footprints_10102019" 
 - taxlots = "taxlots_10102019"
+  - Description: This comprises our unit of observation, if an observation is not included in this data frame, then it is not included in the analysis. All other data frames and attributes are left-joined here.
+  - Dimensions: 197,717 x 49
+  - Geometry: MULTIPOLYGON
 
-#### data2.gdb (retrieved via email on 10/29/2019)
+#### data2.gdb 
 - impsegcop = "CoP_Improvement_Segments"
+  - Descripton: data.frame object, interested in the `SegmentType`, `SegmentNbr`, `SegmentSqft` variables
+  - Dimensions: 1,173,249 x 7
 - impseg = "Improvement_Segments"
+  - Description: data.frame object, interested in the `Plumbing_Code` and `Fire_Place_Code` variables
+  - Dimensions: 1,567,227 x 57
+- school = "school_attendance_areas"
+  - Description: sf object, school catchment areas, divided into elementary, middle and high school
+  - Dimensions: 113 x 8
+  - Geometry: MULTIPOLYGON
 
-#### data_20191112.gdb (retrieved via email on 11/21/2019)
+#### data_20191112.gdb
 - bli_constraints = "bli_constraints_all"
-  - Description: updated constraints layer for accuracy. Contains all 27 of our constraints, but missing taxlot identifiers.
+  - Dimensions: 204,375 x 30
+  - Geometry: MULTIPOLYGON
+  - Description: updated constraints layer, sf object. Contains all 27 of our constraints, missing taxlot identifiers.
+  
 - nbhd = "neighborhoods_no_overlap"
-  - Description: layer of 99 non-overlapping Portland neighborhoods whose levels include: 
+  - Dimensions: 99 x 13
+  - Geometry: MULTIPOLYGON
+  - Description: sf layer of 99 non-overlapping Portland neighborhoods whose levels include: 
 
 | -- | -- | -- |
 |--------|:-------|:------|
@@ -84,13 +119,46 @@ Each of these databases are saved in a directory called "DATA" on each of our ma
 |  GRANT PARK | HILLSDALE | BRIDGETON|  
 |  PEARL DISTRICT | LENTS | PORTSMOUTH  |  
 
-  
-#### tree_canopy.gdb
+#### tree_canopy.gdb 
 - canopy = "canopy_class_2014_metro"
-- bli_capacity2 = "bli_capacity_v2"
-  - Description: includes the updated constraint geographies linked to taxlot numbers. So we'll use this data frame to collapse and join our constraints to the taxlots. 
-
+- bli_constraints_v2 = "bli_constraints_v2_pts_run4"
+  - Dimensions: 204,375 x 42 sf object
+  - Geometry: POINT (centroids of the multipolygons)
+  - Description: includes STATE_ID
   
+#### canopy_20200210.gdb 
+- canopy = "canopy_taxlot_intersect"
+  - Description: intersected taxlot and canopy boundaries, aka all canopy cover in PDX that        intersect a taxlot
+  - Dimensions: 824,307 x 52
+  - Geometry: MULTIPOLYGON
+  
+#### ft_fld.gdb
+- ftfld_ids = "ft_floodplain
+  - Description: sf object
+  - Dimensions: 3,377 x 75
+  - Geometry: MULTIPOLYGON
+
+#### ugb.shp
+- Description: ugb that separates buildable lands from non-buildable lands
+- Dimensions: 1 x 3
+- Geometry: MULTIPOLYGON
+
+#### Complete Neighborhoods Scoring Surface
+- walk = "Complete_Neighborhoods_Scoring_Surface"
+  - Description: normalized accessibility score (0-100)
+  - Dimensions: 325,594 x 5
+  - Geometry: POLYGON
+
+#### Portland Administrative Sextants 
+- sex = "Portland_Administrative_Sextants.shp"
+  - Description: sf layer of 6 quadrants in Portland whose levels include
+| -- | -- | -- |
+|--------|:-------|:------|
+|  N | NE | NW |  
+|  S | SE | SW | 
+  - Dimensions: 6 x 8
+  - Geometry: POLYGON
+
 
 The above layers were read using the `sf` package in R.
 
@@ -231,7 +299,6 @@ ugb %<>%
 # Convert to sp object since we use the rgeos::NearestPoints function that requires this
 # data type, using sp:as_Spatial()
 ugb.sp <- as_Spatial(ugb)
-
 
 # Pull taxlot polygons & calculate centroids
 centroids <- st_geometry(fugly)
