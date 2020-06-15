@@ -16,7 +16,7 @@ library(magrittr)
 
 # Import joined thesis data
 ```{r}
-df <- read.csv(here("DATA", "altered", "thesis-data.csv"))
+df <- read.csv(here("DATA", "thesis-data.csv"))
 
 constraints <- c("conAirHgt",
                     "conCovrly", "conPovrly",
@@ -54,7 +54,6 @@ df %<>%
          percent_vacant = 100*percent_vacant) %>%
   rename(nbhd = NAME)
 
-#export to csv
 ```
 
 
@@ -64,7 +63,6 @@ df %<>%
 • `trim`: 31,388
 
 ```{r}
-#df <- read.csv(here("DATA", "altered", "thesis-data.csv"))
 df$saledate <- as.Date(as.character(df$SALEDATE), "%m/%d/%Y")
 
 # MAKE DROPS
@@ -120,6 +118,13 @@ trim %<>%
 (drop missing variables used for regression, missing at random?)
 • `sfr.dat.cleaned`: 22,433
 
+## Missingness
+Moving from sfr.dat to sfr.dat.cleaned, we drop 2,282 observations.
+
+• maxheight_flg: 1,885
+• totalsqft_flg: 464
+• pct_canopy_cov_flg: 423
+
 ```{r}
 sfr_vars <- c("dist_cityhall", "dist_ugb", "h_baths",
               "f_baths", "AREA", "maxheight", "totalsqft", "garage_dum","bsmt_dum",
@@ -139,25 +144,48 @@ sfr.dat <- trim %>%
          !big_sqft_flag,
          !big_bsmt_flag)
 
+flags <- sfr.dat %>% select(pullVarname(sfr_vars)) %>% is.na()
+colnames(flags) <- paste(colnames(flags), "flg", sep = "_")
+
 sfr.dat.cleaned <- sfr.dat %>%
   select(pullVarname(sfr_vars), constraints, STATE_ID, 
          BLDGSQFT, lnprice, nbhd, sextant) %>%
+  mutate()
   drop_na()
 dim(sfr.dat.cleaned)
-#write.csv(sfr.dat.cleaned, here("DATA", "altered", "sfr-cleaned.csv"))
+
+#write.csv(sfr.dat.cleaned, here("DATA", "sfr-cleaned.csv"))
 ```
 
 # Clean MFR
+
 • `mfr.dat`: 4,187
 (drop missing variables used for regression, missing at random?)
 
 • `mfr.dat.cleaned`: 3,102
+
+## Missingness
+
+Moving from sfr.dat to sfr.dat.cleaned, we drop 1,085 observations. Note that the flags below overlap to give us a total of only 1,085 dropped, not the sum of the missing variables individually. 
+
+• maxheight_flg: 850
+• totalsqft_flg: 485
+• n_units_flg: 485
+• n_buildings_flg: 485
+• pct_canopy_cov_flg: 235
+• h_baths_flg: 219
+• f_baths_flg: 216
+• YEARBUILT_flg: 49 
+
+
 ```{r}
 mfr_vars <- c("dist_cityhall", "dist_ugb", "h_baths",
               "f_baths", "AREA", "maxheight", "garage_dum","bsmt_dum", 
               "pct_canopy_cov", "YEARBUILT", "CN_score", "attic_dum", "year_sold", "n_fireplaces",
               "percent_vacant", "n_units", "n_buildings", "totalsqft", "I(totalsqft^2)", "I(AREA^2)", "I(f_baths^2)")
 
+flags <- mfr.dat %>% select(pullVarname(mfr_vars)) %>% is.na()
+colnames(flags) <- paste(colnames(flags), "flg", sep = "_")
 
 mfr.dat <- trim %>%
   filter(prop_type == "Multi-family",
@@ -175,7 +203,7 @@ mfr.dat.cleaned <- mfr.dat %>%
   drop_na()
 dim(mfr.dat.cleaned)
 
-#write.csv(mfr.dat, here("DATA", "altered", "mfr-cleaned.csv"))
+#write.csv(mfr.dat, here("DATA", "mfr-cleaned.csv"))
 
 ```
 

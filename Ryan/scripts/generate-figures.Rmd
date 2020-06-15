@@ -378,7 +378,7 @@ sfr_mods[[7]] <- re_sfr
 # control vars
 my_reg_table(sfr_mods, title = "SFR Results: Controls", 
              omit = c("nbhd", "sextant", constraints), column.labels = model_labels, 
-                          "sfr-results-controls-copy.htm", digits = 5)
+                          "sfr-results-controls.htm", digits = 5)
 
 # constraint vars
 my_reg_table(sfr_mods[4:7], title = "SFR Results: Constraints",
