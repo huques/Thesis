@@ -11,11 +11,12 @@ library(lubridate)
 #-------------------------------------------------------------------------
 
 # Read in Data
-thesis_data <- read_csv(here::here("DATA","thesis-data.csv"))
+thesis_data <- read_csv(here::here("DATA","thesis-data.csv")) #34,661 obs
+  
 
 # Subset Data
 SFR_raw <- thesis_data %>%
-  filter(PRPCD_DESC == "RESIDENTIAL IMPROVED", prop_type == "Single-family")
+  filter(PRPCD_DESC == "RESIDENTIAL IMPROVED", prop_type == "Single-family") #25,266 obs
 
 #-------------------------------------------------------------------------
 
@@ -31,7 +32,7 @@ SFR_constraints_raw <- SFR_raw %>%
                 conWetland,
                 conInstit, conPrvCom, conPubOwn,
                 conView,
-                conTranCap, conTranInt, conTranSub)
+                conTranCap, conTranInt, conTranSub) #25,266 obs
 
 clean_names <- names(SFR_constraints_raw)
 
@@ -55,10 +56,10 @@ test1 <- SFR_raw %>%
                    LEGAL_DESC, TAXCODE, 
                    PROP_CODE, LANDUSE, 
                    BEDROOMS, ACC_STATUS, 
-                   NAME, COMMPLAN, SHARED, 
+                   NAME, COMMPLAN, 
                    COALIT, HORZ_VERT, AUDIT_NBRH, 
                    MIDDLE_SCH,  Category, SOURCE, 
-                   FRONTAGE, COUNTY, YEARBUILT, bldgtype))
+                   FRONTAGE, COUNTY, YEARBUILT)) #25,266 obs
 
 #garage sqft
 gar_sqft_sum <- test1 %>%
@@ -122,37 +123,41 @@ test1 %<>%
          taxlot_area_sqd = taxlot_area*taxlot_area,
          arms_length = price_ratio > 20,
          yearbuilt = na_if(yearbuilt, 0),
-         saledate = mdy(saledate), 
+         saledate = mdy(SALEDATE), 
          year_sold = year(saledate),
          age_sold = year_sold - yearbuilt,
          pct_canopy_cov = pct_canopy_cov*100,
          SALEPRICElog = log(SALEPRICE),
          top_1 =  SALEPRICE > quantile(SALEPRICE, .99),
          MKTVALYR3 = case_when(MKTVALYR3 != 2018 ~ 2017, 
-                               TRUE ~ 2018),)
+                               TRUE ~ 2018),) #25,266 obs
 
 #-------------------------------------------------------------------------
 
 # Clean SFR dataframe: 
 # remove based on filtering parameters
 test2 <- test1 %>%
-  dplyr::select(-c(matches("zone"))) %>%
-  filter(between(totalsqft, 1, 7500), 
-         yearbuilt > 1500,
-         f_baths < 6,
-         BLDGSQFT != 0,
-         age_sold > 0, 
-         top_1 == FALSE, 
-         arms_length == TRUE, 
-         vacant_dummy == FALSE, 
-         proud_flag == FALSE, 
-         llc_flag == FALSE,
-         trust_flag == FALSE) 
+  dplyr::select(-c(matches("zone"))) %>% #25,266 
+  filter(between(totalsqft, 1, 7500),           #24,717 -- 549 cases      #24,717 -- 549 removed  
+         yearbuilt > 1500,                      #24,152 -- 1,114 cases    #24,107 -- 610 removed  
+         f_baths < 6,                           #24,861 -- 405 cases      #24,072 -- 35 removed  
+         BLDGSQFT != 0,                         #25,217 -- 49 cases       #24,064 -- 8 removed  
+         age_sold > 0,                          #24,053 -- 1,213 cases    #23,970 -- 94 removed 
+         top_1 == FALSE,                        #25,013 -- 253 cases      #23,761 -- 209 removed 
+         arms_length == TRUE,                   #24,748 -- 518 cases      #23,299 -- 462 removed  
+         proud_flag == FALSE,                   #25,251 -- 15 cases       #23,299 -- 0 removed  
+         llc_flag == FALSE,                     #24,853 -- 413 cases      #23,001 -- 298 removed  
+         trust_flag == FALSE,                   #25,214 -- 52 cases       #22,960 -- 41 removed 
+         vacant_dummy == FALSE)                   
 
+# total removed: 2,306 or 9.13% of raw sfr dataset
+
+mary <- test1 %>%
+  filter(between(totalsqft, 1, 7500))
 #-------------------------------------------------------------------------
 
 # Select final relevant variables
-SFR_dat <- test2 %>%
+SFR_dat <- test2 %>% #22,960 obs
   dplyr::select(
     STATE_ID, RNO, PROPERTYID, TLID, 
     OWNER1, SITEADDR, SITEZIP, PRPCD_DESC, 
