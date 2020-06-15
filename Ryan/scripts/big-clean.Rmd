@@ -25,7 +25,8 @@ constraints <- c("conAirHgt",
                    "conNoise", "conSewer", "conSLIDO",
                    "conSlp25", "conStorm", "conTranCap", "conTranSub",
                    "conTranInt", "conTranSub", "conWater", 
-                  "conPubOwn", "conFld100")
+                  "conPubOwn", "conFld100_ft", "conECSI",
+                 "conGW")
 # define helper function to switch NAs in the constraints to 0s
 to0 <- function(x){ifelse(is.na(x), 0, x)}
 
@@ -150,11 +151,10 @@ colnames(flags) <- paste(colnames(flags), "flg", sep = "_")
 sfr.dat.cleaned <- sfr.dat %>%
   select(pullVarname(sfr_vars), constraints, STATE_ID, 
          BLDGSQFT, lnprice, nbhd, sextant) %>%
-  mutate()
   drop_na()
 dim(sfr.dat.cleaned)
 
-#write.csv(sfr.dat.cleaned, here("DATA", "sfr-cleaned.csv"))
+write.csv(sfr.dat.cleaned, here("DATA", "sfr-cleaned.csv"))
 ```
 
 # Clean MFR
@@ -203,7 +203,7 @@ mfr.dat.cleaned <- mfr.dat %>%
   drop_na()
 dim(mfr.dat.cleaned)
 
-#write.csv(mfr.dat, here("DATA", "mfr-cleaned.csv"))
+write.csv(mfr.dat.cleaned, here("DATA", "mfr-cleaned.csv"))
 
 ```
 

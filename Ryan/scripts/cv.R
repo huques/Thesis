@@ -19,14 +19,15 @@
 
 # load the cv library
 library(caret)
+library(nlme)
 
+
+sfr.dat <- read.csv(here("DATA", "sfr-cleaned.csv"))
+mfr.dat <- read.csv(here("DATA", "mfr-cleaned.csv"))
 n <- colnames(sfr.dat)[colnames(sfr.dat) %in% colnames(m$model)]
 
-sfr.dat <- read.csv(here("DATA", "altered", "sfr-cleaned.csv"))
-mfr.dat <- read.csv(here("DATA", "altered", "mfr-cleaned.csv"))
-
 # define training control
-train_control <- trainControl(method="cv", number=5)
+train_control <- trainControl(method="cv", number=10)
 # train the model
 
 # rewrite the formulas for each model
@@ -77,11 +78,43 @@ model1 <- train(genFormula(mfr_vars, constraints),
                 data=mfr.dat, trControl=train_control, method="lm")
 model2 <- train(genFormula(mfr_vars, constraints, "nbhd"), 
                 data=mfr.dat, trControl=train_control, method="lm")
+model3 <- train(genFormula(mfr_vars, constraints, "sextant"), 
+                data=mfr.dat, trControl=train_control, method="lm")
+
 
 print(model1)
 print(model2)
+print(model3)
 
 # -------------------- 4/30 update----------------------------
+# bring in formula function and constants from big-clean and generate-figures:
+
+#=========================================================================
+constraints <- c("conAirHgt",
+                 "conCovrly", "conPovrly",
+                 "conHist", "conHistLdm", 
+                 "conLSHA", "conLUST",
+                 "conNoise", "conSewer", "conSLIDO",
+                 "conSlp25", "conStorm", "conTranCap", "conTranSub",
+                 "conTranInt", "conTranSub", "conWater", 
+                 "conPubOwn", "conFld100_ft", "conECSI",
+                 "conGW")
+collinearity.mfr <- c("conWetland", "conPrvCom", "conPovrly", "conSewer", "conLUST")
+collinearity.sfr <- c("conWetland", "conPrvCom")
+sfr_vars <- c("dist_cityhall", "dist_ugb", "h_baths",
+              "f_baths", "AREA", "maxheight", "totalsqft", "garage_dum","bsmt_dum",
+              "pct_canopy_cov", "YEARBUILT", "n_fireplaces", "CN_score", "attic_dum", "year_sold", 
+              "percent_vacant", "I(AREA^2)", "I(totalsqft^2)", "I(CN_score^2)")
+mfr_vars <- c("dist_cityhall", "dist_ugb", "h_baths",
+              "f_baths", "AREA", "maxheight", "garage_dum","bsmt_dum", 
+              "pct_canopy_cov", "YEARBUILT", "CN_score", "attic_dum", "year_sold", "n_fireplaces",
+              "percent_vacant", "n_units", "n_buildings", "totalsqft", "I(totalsqft)", "I(AREA^2)", "I(f_baths^2)")
+genFormula <- function(...){
+  string <- paste(c(...), collapse = " + ")
+  paste0("lnprice ~", string) %>% as.formula
+}
+#=========================================================================
+
 cv.mfr.quad <- train(genFormula(mfr_vars, "sextant", setdiff(constraints, collinearity.mfr)), 
                 data=mfr.dat, trControl=train_control, method="lm")
 
@@ -91,9 +124,9 @@ cv.mfr.nbhd <- train(genFormula(mfr_vars, "nbhd", setdiff(constraints, collinear
 cv.mfr.nofe <- train(genFormula(mfr_vars, setdiff(constraints, collinearity.mfr)), 
                 data=mfr.dat, trControl=train_control, method="lm")
 
-cv.mfr.nofe
-cv.mfr.quad
-cv.mfr.nbhd
+cv.mfr.nofe  # RMSE: 0.264 
+cv.mfr.quad  # RMSE: 0.2430933
+cv.mfr.nbhd  # RMSE: 0.2323195
 
 
 cv.sfr.quad <- train(genFormula(sfr_vars, "sextant", setdiff(constraints, collinearity.sfr)), 
@@ -105,12 +138,9 @@ cv.sfr.nbhd <- train(genFormula(sfr_vars, "nbhd", setdiff(constraints, collinear
 cv.sfr.nofe <- train(genFormula(sfr_vars, setdiff(constraints, collinearity.sfr)), 
                      data=sfr.dat, trControl=train_control, method="lm")
 
-cv.sfr.re <- train(genFormula(sfr_vars, setdiff(constraints, collinearity.sfr)), 
-                   data=sfr.dat, trControl=train_control, method="lme")
 
-
-cv.sfr.nofe
-cv.sfr.quad
-cv.sfr.nbhd
+cv.sfr.nofe   # RMSE: 0.2036476
+cv.sfr.quad   # RMSE: 0.2019262
+cv.sfr.nbhd   # RMSE: 0.1858925
 
 
