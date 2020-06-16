@@ -5,8 +5,8 @@
 #### Non-market Valuation in Portland, OR
 This project is part of a year-long thesis in consultation with Noelwah Netusil at Reed College and the Bureau of Planning and Sustainability. 
 
-#### Abstract: 
- Our goal is to amassing a single data frame from several separate sources. With this data frame, we will calculate the marginal influence of environmental constraints (i.e. location within a 100-year floodplain, locating within a historic district, etc.) on the sale price of properties that have transacted within Multnomah county in the last five years. This document lays out the methodology used to develop our data set starting from the source of our raw files to the data frame used to estimate a hedonic price function. 
+### Abstract: 
+ Our goal is to amass a single data frame from several separate sources. With this data frame, we will calculate the marginal influence of environmental constraints (i.e. location within a 100-year floodplain, locating within a historic district, etc.) on the sale price of properties that have transacted within Multnomah county in the last five years. This document lays out the methodology used to develop our data set starting from the source of our raw files to the data frame used to estimate a hedonic price function. 
 
 ### Creators: 
 Salma Huque - Reed College '20, 
@@ -17,62 +17,68 @@ Nick Kobel - Data Analyst at Bureau of Planning and Sustainability,
 
 ### Identifers: 
 PROPERTYID
+
 STATE_ID
 
 ### Date:
-1. [Received 10/10/2019 via USB -> DATA/data1.gdb](#DATA/data1.gdb)
-2. Received 10/29/2019 via email -> DATA/data2.gdb
-3. Received 11/21/2019 via email -> DATA/data-20191112.gdb
-4. Received 11/22/2019 via email -> DATA/tree_canopy.gdb and DATA/Zoning_History
-5. Received 11/25/2019 -> DATA/ugb/ugb.shp
-6. Received 2/04/2020 -> DATA/zoning_crosswalk.xlsx
-7. **Created 2/10/2020 in GIS -> DATA/canopy_20200210.gdb
-8. *Retrieved 2/11/2020 via OpenData.com -> DATA/Complete_Neighborhoods_Scoring_Surface
-9. **Created 2/13/2020 in GIS -> DATA/constraint_layers.gdb
-10. **Created 3/7/2020 in GIS using FEMA map (OpenData, link broken?) and 'building_footprints_20191010' layer (data1.gdb) -> DATA/ft_fld.gdb
-11. *Retrieved 4/2/2020 via OpenData.com -> DATA/Portland_Administrative_Sextants/Portland_Administrative_Sextants.shp
+1. Received 10/10/2019 via USB -> [DATA/data1.gdb](#data1)
+2. Received 10/29/2019 via email -> [DATA/data2.gdb](#data2)
+3. Received 11/21/2019 via email -> [DATA/data-20191112.gdb](#data-20191112)
+4. Received 11/22/2019 via email -> [DATA/tree_canopy.gdb](#tree_canopy) and [DATA/Zoning_History](#Zoning_History)
+5. Received 11/25/2019 -> [DATA/ugb/ugb.shp](#ugb)
+6. Received 2/04/2020 -> [DATA/zoning_crosswalk.xlsx](#zoning_crosswalk)
+7. **Created 2/10/2020 in GIS -> [DATA/canopy_20200210.gdb](#canopy_20200210)
+8. *Retrieved 2/11/2020 via OpenData.com -> [DATA/Complete_Neighborhoods_Scoring_Surface](#Complete Neighborhoods Scoring Surface)
+9. **Created 2/13/2020 in GIS -> [DATA/constraint_layers.gdb](#constraint_layers)
+10. **Created 3/7/2020 in GIS using FEMA map (OpenData, link broken?) and 'building_footprints_20191010' layer (data1.gdb) -> [DATA/ft_fld.gdb](#ft_fld)
+11. *Retrieved 4/2/2020 via OpenData.com -> [DATA/Portland_Administrative_Sextants/Portland_Administrative_Sextants.shp](#Portland Administrative Sextants)
 
-### Method:
+### Source:
 - Queried from relational database at BPS and sent to us via email and USB
 - *Retrieved separately from OpenData.com (not received in consultation with BPS).
 - **Created by Ryan Kobler and Salma Huque using GIS Intersect tool, methods given below
 
+### GIS Methods:
 To create DATA/canopy_20200210.gdb, "canopy_taxlot_intersect" layer...
-    1. Loaded 'taxlots_20191010' layer from data1.gdb into new ArcMap file
-    2. Loaded 'canopy_class_2014_metro' layer from tree_canopy.gdb
-    3. Used intersect tool to intersect the above layers
-    4. Exported intersected layer from ArcGIS to Shapefile
+1. Load 'taxlots_20191010' layer from data1.gdb into new ArcMap file
+2. Load 'canopy_class_2014_metro' layer from tree_canopy.gdb
+3. Use intersect tool to intersect the above layers
+4. Export intersected layer from ArcGIS to Shapefile
 
 To create DATA/DATA/ft_fld.gdb, "ft_floodplain" layer...
-    1. Loaded 'building_footprints_20191010' layer from data1.gdb into new ArcMap file
-    2. Loaded 'FEMA' 100 year floodplain layer from OpenData.com, source: 
-    3. Used intersect tool to intersect the above layers
-    4. Exported intersected layer from ArcGIS to Shapefile
+1. Load 'building_footprints_20191010' layer from data1.gdb into new ArcMap file
+2. Load 'FEMA' 100 year floodplain layer from OpenData.com, source: 
+3. Use intersect tool to intersect the above layers
+4. Export intersected layer from ArcGIS to Shapefile
   
 ***
 # Raw Data Directory
-Each of these databases are saved in a directory called "DATA" on each of our machines. The bullet points represent layers included in the larger geodatabase. 
+Each of these databases are saved in a directory called "DATA" on each of our machines. The bullet points represent layers included in the larger geodatabase. The data frames with links have extra transformations performed, detailed in Processing. 
 
-#### data1.gdb <a name="DATA/data1.gdb"></a>  
-- footprints = "footprints_10102019" 
+#### data1.gdb <a name="data1"></a>  
+- [footprints](#footprints) = "footprints_10102019" 
+  - Description:
+  - Dimensions: 
+  - Geometry: MULTIPOLYGON
 - taxlots = "taxlots_10102019"
   - Description: This comprises our unit of observation, if an observation is not included in this data frame, then it is not included in the analysis. All other data frames and attributes are left-joined here.
   - Dimensions: 197,717 x 49
   - Geometry: MULTIPOLYGON
 
-#### data2.gdb 
-- impsegcop = "CoP_Improvement_Segments"
-  - Descripton: data.frame object, interested in the `SegmentType`, `SegmentNbr`, `SegmentSqft` variables
+<a name="data2"></a>
+#### data2.gdb   
+- [impsegcop](#impsegcop) = "CoP_Improvement_Segments"
+  - Descripton: data.frame object, interested in the `SegmentType`, `SegmentNbr`, `SegmentSqft` variables, which correspond to different types of improvements upon a taxlot. For example suppose a taxlot has a 100 sqft deck and a 30 sqft pool. Then we want to retain `DECK` and `POOL` as variables within the final data set where the cells are populated with the number of square feet of each improvement
   - Dimensions: 1,173,249 x 7
-- impseg = "Improvement_Segments"
-  - Description: data.frame object, interested in the `Plumbing_Code` and `Fire_Place_Code` variables
+- [impseg](#impseg) = "Improvement_Segments"
+  - Description: data.frame object, interested in the `Plumbing_Code` and `Fire_Place_Code` variables that take values FB1, HB2, etc.
   - Dimensions: 1,567,227 x 57
-- school = "school_attendance_areas"
+- [school](#centroid_joins) = "school_attendance_areas"
   - Description: sf object, school catchment areas, divided into elementary, middle and high school
   - Dimensions: 113 x 8
   - Geometry: MULTIPOLYGON
 
-#### data_20191112.gdb
+#### data_20191112.gdb <a name="data_20191112"></a>  
 - bli_constraints = "bli_constraints_all"
   - Dimensions: 204,375 x 30
   - Geometry: MULTIPOLYGON
@@ -119,48 +125,46 @@ Each of these databases are saved in a directory called "DATA" on each of our ma
 |  GRANT PARK | HILLSDALE | BRIDGETON|  
 |  PEARL DISTRICT | LENTS | PORTSMOUTH  |  
 
-#### tree_canopy.gdb 
+#### tree_canopy.gdb <a name="tree_canopy"></a>  
 - canopy = "canopy_class_2014_metro"
 - bli_constraints_v2 = "bli_constraints_v2_pts_run4"
   - Dimensions: 204,375 x 42 sf object
   - Geometry: POINT (centroids of the multipolygons)
   - Description: includes STATE_ID
   
-#### canopy_20200210.gdb 
+#### canopy_20200210.gdb <a name="canopy_20200210"></a>
 - canopy = "canopy_taxlot_intersect"
-  - Description: intersected taxlot and canopy boundaries, aka all canopy cover in PDX that        intersect a taxlot
+  - Description: intersected taxlot and canopy boundaries, all canopy cover in PDX that        intersects a taxlot
   - Dimensions: 824,307 x 52
   - Geometry: MULTIPOLYGON
   
-#### ft_fld.gdb
-- ftfld_ids = "ft_floodplain
+#### ft_fld.gdb <a name="canopy_20200210"></a>
+- ftfld_ids = "ft_floodplain"
   - Description: sf object
   - Dimensions: 3,377 x 75
   - Geometry: MULTIPOLYGON
 
-#### ugb.shp
-- Description: ugb that separates buildable lands from non-buildable lands
+#### ugb.shp <a name="ugb"></a>
+- Description: "The boundary controls urban expansion onto farm and forest lands. Metro is responsible for managing the Portland metropolitan region's urban growth boundary and is required by state law to have a 20-year supply of land for future residential development inside the boundary."
+  - Source - http://rlisdiscovery.oregonmetro.gov/?action=viewDetail&layerID=178
 - Dimensions: 1 x 3
-- Geometry: MULTIPOLYGON
+- Geometry: MULTILINESTRING
 
-#### Complete Neighborhoods Scoring Surface
+#### Complete Neighborhoods Scoring Surface <a name="Complete Neighborhoods Scoring Surface"></a>
 - walk = "Complete_Neighborhoods_Scoring_Surface"
-  - Description: normalized accessibility score (0-100)
+  - Description: Measures the level of "completeness" of areas within the City of Portland. Completeness is defined by a neighborhood's proximity to various amenities, such as grocery stores, parks and recreation facilities, commercial services, elementary schools, pedestrian and bicycle infrastructure, and transit, normalized score (0-100).
+    - Source - http://gis-pdx.opendata.arcgis.com/datasets/complete-neighborhoods-overlay
   - Dimensions: 325,594 x 5
   - Geometry: POLYGON
+  
 
-#### Portland Administrative Sextants 
-- sex = "Portland_Administrative_Sextants.shp"
-  - Description: sf layer of 6 quadrants in Portland whose levels include
-| -- | -- | -- |
-|--------|:-------|:------|
-|  N | NE | NW |  
-|  S | SE | SW | 
+#### Portland Administrative Sextants <a name="Portland Administrative Sextants"></a>
+- [quads](#centroid_joins) = "Portland_Administrative_Sextants.shp"
+  - Description: Sf object, layer of polygons dividing Portland into 6 administrative sextants. Levels include N, NE, NW, S, SE, SW
+    - Source - http://gis-pdx.opendata.arcgis.com/datasets/portland-administrative-sextants
   - Dimensions: 6 x 8
   - Geometry: POLYGON
 
-
-The above layers were read using the `sf` package in R.
 
 ***
 
@@ -178,25 +182,26 @@ See [dictionary.md](https://github.com/huques/Thesis/blob/master/dictionary.md "
 
 ```{r}
 taxlots %>%
-filter(saledate > 2015-01-01 & saledate < 2019-01-01)
+filter(saledate >= 2015-01-01 & saledate <= 2019-01-01)
 ```
 ### Variable Transformations
-1. Footprints: 
+
+<a name="data2"></a>
+#### 1. Footprints: 
+We'll collapse and join footprints to the `taxlots_pruned` by their `STATE_ID` to get characteristics such as the number of buildings, number of units, and the maximum building height on a taxlot.
+
 ```{r}
-footprints %<>% 
-  lwgeom::st_make_valid() %>%
-  group_by(STATE_ID) %>%
-  summarise(totalsqft = sum(BLDG_SQFT, na.rm = T),
-            yearbuilt = mean(YEAR_BUILT, na.rm = T),
-            avgheight = mean(AVG_HEIGHT, na.rm = T),
-            surfelev = mean(SURF_ELEV, na.rm = T),
-            minheight = mean(MIN_HEIGHT, na.rm = T),
-            maxheight = mean(MAX_HEIGHT, na.rm = T),
-            volume = mean(VOLUME, na.rm = T),
-            bldgtype = BLDG_TYPE[1],
-            bldguse = BLDG_USE[1]) 
+ftprints_pruned %<>% 
+  st_drop_geometry() %>%
+  dplyr::group_by(STATE_ID) %>%
+  dplyr::summarise(totalsqft = sum(BLDG_SQFT, na.rm = T),
+            maxheight = max(AVG_HEIGHT, na.rm = T),
+            n_units = sum(UNITS_RES, na.rm = T),
+            n_buildings = n()) 
 ```
-2. Improvement segments (CoP):
+
+<a name="impsegcop"></a>
+#### 2. Improvement segments (CoP):
 These contain our garage, pool, shed, porch, deck, etc. square footage variables to possibly(?) be transformed into dummy variables. Currently they're in the full data set as square footages. The data frame was transformed as in the example below:
 
 | PropID | SegmentType | SegmentSqFt  |
@@ -220,8 +225,8 @@ impsegcop_wide <- dcast(setDT(isc_pruned), PropID ~ SegmentType,
               fill = 0,
               fun.aggregate = sum)
 ```
-
-3. Improvement segments (non-CoP):
+<a name="impseg"></a>
+#### 3. Improvement segments (non-CoP):
 
   - For each segment under property ID X, collapsed string variables `Plumbing_Code` and `Fire_Place_Code` from 
 
@@ -263,7 +268,7 @@ impseg <- left_join(impseg, baths, by = "PropertyID")
 impseg <- left_join(impseg, fires, by = "PropertyID") 
 
 ```
-4. Distance to Portland City Hall, a proxy for distance to Central Business District (CBD)
+#### 4. Distance to Portland City Hall, a proxy for distance to Central Business District (CBD)
 
 This `dist_cityhall` variable measures the Euclidean distance in feet of each property to Portland city hall. We generated this variable using the `st_distance()` function within the `sf` R package. The code is reproduced below:
 
@@ -286,12 +291,13 @@ taxlots %<>%
                                      which = "Euclidean"))
                                      
 ```  
-5. Distance to nearest point of the UGB
+<a name="ugb2"></a>
+#### 5. Distance to nearest point of the UGB
 
 This variable measures the Euclidean distance in feet of each property to the UGB. Generated using the `st_distance()` function within the `sf` and `sp` packages. This approach calculates distances using the centroids of MULTIPOLYGON taxlots. So, in the process, the st_geometry() attribute of the taxlot spatial data frame is changed from polygons to points. The geometry can be reset to MULTIPOLYGONS afterward. The code is reproduced below:
 
 ```{r}
-# Transform UGB shapefile to correct coordinate system
+# Transform UGB shapefile to correct coordinate system and as a multilinestring
 ugb %<>% 
   st_transform(2913) %>% 
   st_cast(., "MULTILINESTRING")
@@ -325,6 +331,113 @@ nearest_points <- do.call(c, nearest_points)
 fugly$dist_ugb <- mapply(FUN = st_distance, nearest_points, centroids)
 ```
 
+#### 4. Centroid Joins (walkscores, neighborhood fixed effects, sextants, school zones, zones)
+![Generic Centroid join](Images/centroid-join.png)
+
+Above, each dot is a taxlot centroid and the polygons the layers we want to attach (add as a column) in the larger data frame. This procedure is identical for neighborhoods, quadrants, school catchment areas, and constraints.
+
+
+#### 6. Percent Vacant Properties within 200 ft
+
+Consider all taxlots in the sample regardless of the year in which they sold. We will use the variable `PRPCD_DESC` to identify parcels that are vacant. First identify all vacant parcels with
+```{R}
+vacancy_pruned <- taxlots %>%
+  dplyr::select(STATE_ID, PRPCD_DESC, Shape) %>%
+  group_by(STATE_ID) %>%
+  mutate(n = n()) %>%
+  filter(n == 1, !is.na(PRPCD_DESC)) 
+
+```
+
+Then create a dummy variable denoting whether a property is vacant.
+
+```{r}
+vacancy_pruned %<>% 
+  mutate(VACANT = case_when(PRPCD_DESC == "VACANT LAND" ~ 1,
+                            TRUE ~ 0))
+```
+
+Create a 200 ft buffer around each taxlot in the data frame `taxlots_pruned`.
+
+```{r}
+# set buffer dist
+conv <- 0.3048
+ft <- 200
+buffer_dist <- ft * conv
+
+# create buffer of size `buffer_dist` around each taxlot
+buffy <- taxlots_pruned %>%
+  rename(ShapeBuffy = Shape) %>%
+  st_buffer(buffer_dist)
+```
+
+Inner join the `vacancy_pruned` data frame and our taxlots sold in last 5 years, `buffy`. From here, we can group by the taxlots used in the analysis in `taxlots_pruned`, and calculate the ratio of non-vacant to vacant properties. Below is an image overlaying the taxlot buffer and surrounding taxlots colored by `PRPCD_DESC` categorical variable.
+
+![Buffy figure](Images/buffy.png)
+
+And the code to calculate the ratio!
+
+```{r}
+vacant_join_buffy <- st_join(buffy, vacancy_pruned)
+
+# calculates percent vacant houses in buffer
+vacant_var <- vacant_join_buffy %>%
+  st_drop_geometry() %>%
+  dplyr::group_by(STATE_ID.x) %>% # grouping by taxlot_pruned taxlots
+  dplyr::summarize(percent_vacant = mean(vacant)) %>% # calculate percent
+  dplyr::rename(STATE_ID = STATE_ID.x) # rename to join back to full df
+```
+
+### 14. Percent of Lot Covered by Canopy
+
+```{r}
+# Collapse canopy by STATE_ID and generate canopy coverage ratios
+canopy <- canopy %>%
+  # filter for just those STATE_IDs in the taxlots pruned data set
+  dplyr::filter(STATE_ID %in% stateids) %>% 
+  rename(canopy_area = Shape_Area) %>%
+  # join the taxlot areas by state_id (for the denominator)
+  dplyr::left_join(taxlot_areas, by = "STATE_ID") %>% 
+  # dropped because we had many self-intersections when trying to summarize
+  st_drop_geometry() %>% 
+  dplyr::group_by(STATE_ID) %>% 
+  # take the first element in taxlot_area
+  dplyr::summarise(pct_canopy_cov = sum(canopy_area) / taxlot_area[1], 
+                   # save numerator and denominator separately
+                   total_canopy_cov = sum(canopy_area), 
+                   taxlot_area = taxlot_area[1]) 
+```
+
+### 15. Constraints
+
+We will use a combination of the `bli_constraints` (not connected to `STATE_ID`) and `bli_constraints_v2` (connected to `STATE_ID`, but with centroid geometries of intersected taxlots and constraints) sf objects to generate the 27 constraint dummy variables. 
+
+Change <NA>, "True" instances to 0, 1 for all 204,000+ properties.
+```{r}
+non_id_constraints <- bli_constraints_v2 %>%
+  dplyr::select(contains("con")) %>%
+  mutate_if(is.factor, genDummy)
+```
+
+Switch from centroid to polygon geometry.
+```{r}
+st_geometry(non_id_constraints) <- st_geometry(bli_constraints)
+```
+
+Left join the constraint polygons to the taxlot centroids.
+```{R}
+firstjoin <- st_join(st_centroid(taxlots_pruned), non_id_constraints, left = T)
+```
+
+Collapse these observations so that we keep all the constraints as either 1 or 0 for each property. Here, we're not worrying about partial constraints.
+```{r}
+dumdum_constraints <- firstjoin %>%
+  dplyr::group_by(STATE_ID) %>%
+  dplyr::select(contains("con")) %>% 
+  st_drop_geometry() %>%
+  ungroup()
+```
+Then we left join the dummy constraints back to the overall data set.
 
 ***
 

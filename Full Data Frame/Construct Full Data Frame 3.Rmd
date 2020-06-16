@@ -188,16 +188,19 @@ dim(fugly)
 taxlots$STATE_ID <- fct_explicit_na(taxlots$STATE_ID)
 
 # df of unique obs -- 197,131 obs
+# note that most of the repeat observations in taxlots have missing data for vacant land
+# (there are 1024 missing), so we'll remove them
 vacancy_pruned <- taxlots %>%
   dplyr::select(STATE_ID, PRPCD_DESC, Shape) %>%
   group_by(STATE_ID) %>%
   mutate(n = n()) %>%
-  filter(n == 1) 
+  filter(n == 1, !is.na(PRPCD_DESC)) 
 
 # create vacant column
-vacancy_pruned %<>% 
-  mutate(VACANT = case_when(PRPCD_DESC == "VACANT LAND" ~ 1,
-                            TRUE ~ 0))
+vacancy_pruned$VACANT <- vacancy_pruned$PRPCD_DESC == "VACANT LAND"
+# vacancy_pruned %<>% 
+#   mutate(VACANT = case_when(PRPCD_DESC == "VACANT LAND" ~ 1,
+#                             TRUE ~ 0))
 
 # creates a buffer called buffer_dist
 # 1 ft = 0.3048 meters
@@ -211,17 +214,14 @@ buffy <- taxlots_pruned %>%
   st_buffer(buffer_dist)
 
 # join buffy and vacancy_pruned columns 
-vacant_join_buffy <- st_join(buffy, vacancy_pruned, left = TRUE)
+vacant_join_buffy <- st_join(buffy, vacancy_pruned)
 
 # calculates percent vacant houses in buffer
 # taking out na's when calcing percent vacant
 vacant_var <- vacant_join_buffy %>%
   st_drop_geometry() %>%
   dplyr::group_by(STATE_ID.x) %>%
-  dplyr::mutate(n = n(),
-         VACANT = VACANT*1) %>%
-  dplyr::filter(!is.na(VACANT)) %>% 
-  dplyr::summarize(percent_vacant = sum(VACANT)/n[1]) %>%
+  dplyr::summarise(percent_vacant = mean(VACANT)) %>%
   dplyr::rename(STATE_ID = STATE_ID.x)
 
 # join to dataframe 
@@ -232,10 +232,6 @@ rm(vacant_var, vacant_join_buffy, buffy, vacancy_pruned)
 
 
 ### 7. Schools
-
-One problem with an st_intersection is some lots are divided by the school catchment area boundaries, resulting in non-unique STATE_IDs. The st_intersection adds a second observation if it a tax lot is partially within catchment area 1 and partially within catchment area 2.
-
-This is the reason the number of observations rose after the intersection. 
 
 ```{r}
 school %<>% 
@@ -328,12 +324,12 @@ ftprints_pruned %<>%
   st_drop_geometry() %>%
   dplyr::group_by(STATE_ID) %>%
   dplyr::summarise(totalsqft = sum(BLDG_SQFT, na.rm = T),
-            yearbuilt = mean(YEAR_BUILT, na.rm = T),
-            maxheight = max(AVG_HEIGHT, na.rm = T), #need extra cleaning
-            avgheight = mean(AVG_HEIGHT, na.rm = T),
-            surfelev = mean(SURF_ELEV, na.rm = T),
-            minheight = mean(MIN_HEIGHT, na.rm = T),
-            volume = mean(VOLUME, na.rm = T),
+            #yearbuilt = mean(YEAR_BUILT, na.rm = T),
+            maxheight = max(AVG_HEIGHT, na.rm = T),
+            #avgheight = mean(AVG_HEIGHT, na.rm = T),
+            #surfelev = mean(SURF_ELEV, na.rm = T),
+            #minheight = mean(MIN_HEIGHT, na.rm = T),
+            #volume = mean(VOLUME, na.rm = T),
             n_units = sum(UNITS_RES, na.rm = T),
             n_buildings = n()) 
 
@@ -406,8 +402,7 @@ fugly$h_baths <- NA
 extractBaths <- function(string){
   if(is.na(string)){c(fb = NA, hb = NA)}
   else{
-    str <- strsplit(string, "[[:punct:]]")[[1]]
-    str <- sort(str)
+    str <- strsplit(string, "[[:punct:]]")[[1]] %>% sort()
     fb <- str[grepl("FB", str)]
     hb <- str[grepl("HB", str)]
     nfb <- sum(as.numeric(gsub("FB", "", fb)))
