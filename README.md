@@ -28,10 +28,10 @@ STATE_ID
 5. Received 11/25/2019 -> [DATA/ugb/ugb.shp](#ugb)
 6. Received 2/04/2020 -> [DATA/zoning_crosswalk.xlsx](#zoning_crosswalk)
 7. **Created 2/10/2020 in GIS -> [DATA/canopy_20200210.gdb](#canopy_20200210)
-8. *Retrieved 2/11/2020 via OpenData.com -> [DATA/Complete_Neighborhoods_Scoring_Surface](#Complete Neighborhoods Scoring Surface)
+8. *Retrieved 2/11/2020 via OpenData.com -> [DATA/Complete_Neighborhoods_Scoring_Surface](#cn)
 9. **Created 2/13/2020 in GIS -> [DATA/constraint_layers.gdb](#constraint_layers)
 10. **Created 3/7/2020 in GIS using FEMA map (OpenData, link broken?) and 'building_footprints_20191010' layer (data1.gdb) -> [DATA/ft_fld.gdb](#ft_fld)
-11. *Retrieved 4/2/2020 via OpenData.com -> [DATA/Portland_Administrative_Sextants/Portland_Administrative_Sextants.shp](#Portland Administrative Sextants)
+11. *Retrieved 4/2/2020 via OpenData.com -> [DATA/Portland_Administrative_Sextants/Portland_Administrative_Sextants.shp](#pdx_admin_sextants)
 
 ### Source:
 - Queried from relational database at BPS and sent to us via email and USB
@@ -55,7 +55,7 @@ To create DATA/DATA/ft_fld.gdb, "ft_floodplain" layer...
 # Raw Data Directory
 Each of these databases are saved in a directory called "DATA" on each of our machines. The bullet points represent layers included in the larger geodatabase. The data frames with links have extra transformations performed, detailed in Processing. 
 
-#### data1.gdb <a name="data1"></a>  
+#### 1. data1.gdb <a name="data1"></a>  
 - [footprints](#footprints) = "footprints_10102019" 
   - Description:
   - Dimensions: 
@@ -65,26 +65,28 @@ Each of these databases are saved in a directory called "DATA" on each of our ma
   - Dimensions: 197,717 x 49
   - Geometry: MULTIPOLYGON
 
-<a name="data2"></a>
-#### data2.gdb   
+#### 2. data2.gdb <a name="data2"></a>
 - [impsegcop](#impsegcop) = "CoP_Improvement_Segments"
   - Descripton: data.frame object, interested in the `SegmentType`, `SegmentNbr`, `SegmentSqft` variables, which correspond to different types of improvements upon a taxlot. For example suppose a taxlot has a 100 sqft deck and a 30 sqft pool. Then we want to retain `DECK` and `POOL` as variables within the final data set where the cells are populated with the number of square feet of each improvement
   - Dimensions: 1,173,249 x 7
 - [impseg](#impseg) = "Improvement_Segments"
   - Description: data.frame object, interested in the `Plumbing_Code` and `Fire_Place_Code` variables that take values FB1, HB2, etc.
   - Dimensions: 1,567,227 x 57
+- [gisimpcop](#gisimpcop)
+  - Description: data.frame object, contains information on ADUs, identified by `PropID` (ex. R148129) and `PropertyID` (ex. 104648)
+  - Dimensions:  282,451 x 12
 - [school](#centroid_joins) = "school_attendance_areas"
   - Description: sf object, school catchment areas, divided into elementary, middle and high school
   - Dimensions: 113 x 8
   - Geometry: MULTIPOLYGON
 
-#### data_20191112.gdb <a name="data_20191112"></a>  
-- bli_constraints = "bli_constraints_all"
+#### 3. data-20191112.gdb <a name="data-20191112"></a>  
+- [bli_constraints](#constraints) = "bli_constraints_all"
   - Dimensions: 204,375 x 30
   - Geometry: MULTIPOLYGON
   - Description: updated constraints layer, sf object. Contains all 27 of our constraints, missing taxlot identifiers.
   
-- nbhd = "neighborhoods_no_overlap"
+- [nbhd](#centroid_joins) = "neighborhoods_no_overlap"
   - Dimensions: 99 x 13
   - Geometry: MULTIPOLYGON
   - Description: sf layer of 99 non-overlapping Portland neighborhoods whose levels include: 
@@ -125,47 +127,52 @@ Each of these databases are saved in a directory called "DATA" on each of our ma
 |  GRANT PARK | HILLSDALE | BRIDGETON|  
 |  PEARL DISTRICT | LENTS | PORTSMOUTH  |  
 
-#### tree_canopy.gdb <a name="tree_canopy"></a>  
-- canopy = "canopy_class_2014_metro"
-- bli_constraints_v2 = "bli_constraints_v2_pts_run4"
+#### 4. tree_canopy.gdb <a name="tree_canopy"></a>  
+- [bli_constraints_v2](#constraints) = "bli_constraints_v2_pts_run4"
   - Dimensions: 204,375 x 42 sf object
   - Geometry: POINT (centroids of the multipolygons)
   - Description: includes STATE_ID
-  
-#### canopy_20200210.gdb <a name="canopy_20200210"></a>
-- canopy = "canopy_taxlot_intersect"
-  - Description: intersected taxlot and canopy boundaries, all canopy cover in PDX that        intersects a taxlot
-  - Dimensions: 824,307 x 52
-  - Geometry: MULTIPOLYGON
-  
-#### ft_fld.gdb <a name="canopy_20200210"></a>
-- ftfld_ids = "ft_floodplain"
-  - Description: sf object
-  - Dimensions: 3,377 x 75
-  - Geometry: MULTIPOLYGON
 
-#### ugb.shp <a name="ugb"></a>
+#### 5. [ugb.shp](#ugb2) <a name="ugb"></a>
 - Description: "The boundary controls urban expansion onto farm and forest lands. Metro is responsible for managing the Portland metropolitan region's urban growth boundary and is required by state law to have a 20-year supply of land for future residential development inside the boundary."
   - Source - http://rlisdiscovery.oregonmetro.gov/?action=viewDetail&layerID=178
 - Dimensions: 1 x 3
 - Geometry: MULTILINESTRING
 
-#### Complete Neighborhoods Scoring Surface <a name="Complete Neighborhoods Scoring Surface"></a>
-- walk = "Complete_Neighborhoods_Scoring_Surface"
+#### 6. zoning_crosswalk.xlsx
+
+#### 7. canopy_20200210.gdb <a name="canopy_20200210"></a>
+- [canopy](#canopy) = "canopy_taxlot_intersect"
+  - Description: intersected taxlot and canopy boundaries, all canopy cover in PDX that        intersects a taxlot
+  - Dimensions: 824,307 x 52
+  - Geometry: MULTIPOLYGON
+  
+#### 8. Complete Neighborhoods Scoring Surface <a name="cn"></a>
+- [walk](#centroid_joins) = "Complete_Neighborhoods_Scoring_Surface"
   - Description: Measures the level of "completeness" of areas within the City of Portland. Completeness is defined by a neighborhood's proximity to various amenities, such as grocery stores, parks and recreation facilities, commercial services, elementary schools, pedestrian and bicycle infrastructure, and transit, normalized score (0-100).
     - Source - http://gis-pdx.opendata.arcgis.com/datasets/complete-neighborhoods-overlay
   - Dimensions: 325,594 x 5
   - Geometry: POLYGON
   
+#### 9. constraint_layers.gdb <a name="constraint_layers"></a>
+- intersectionz = "Intersectionz"
+  - Description: 
+  - Dimensions:
+  - Geometry: 
 
-#### Portland Administrative Sextants <a name="Portland Administrative Sextants"></a>
+#### 10. ft_fld.gdb <a name="ft_fld"></a>
+- ftfld_ids = "ft_floodplain"
+  - Description: sf object
+  - Dimensions: 3,377 x 75
+  - Geometry: MULTIPOLYGON
+
+#### 11. Portland Administrative Sextants <a name="pdx_admin_sextants"></a>
 - [quads](#centroid_joins) = "Portland_Administrative_Sextants.shp"
   - Description: Sf object, layer of polygons dividing Portland into 6 administrative sextants. Levels include N, NE, NW, S, SE, SW
     - Source - http://gis-pdx.opendata.arcgis.com/datasets/portland-administrative-sextants
   - Dimensions: 6 x 8
   - Geometry: POLYGON
-
-
+  
 ***
 
 # Content Description
@@ -176,18 +183,156 @@ See [dictionary.md](https://github.com/huques/Thesis/blob/master/dictionary.md "
 ***
 
 # Processing
+
+9. Distance to Urban Growth Boundary (NEEDS PICTURE)
+13. Accessory Dwelling Unit Dummy
+14. Percent of Lot Covered by Canopy (needs picture)
+16. 100-Year Floodplain Building Footprint Method
+18. Partial Constraints
+19. Zoning Changes
+
+
+
+
+### Variable Transformations
+
+#### 3. Take Sample of Taxlots
 1) Initially the taxlots data frame had all taxlots within the city of Portland
 2) Took observations that had transacted within the interval [2015/01/01 - 2019/01/01], format = YYYY/MM/DD.
-
 
 ```{r}
 taxlots %>%
 filter(saledate >= 2015-01-01 & saledate <= 2019-01-01)
 ```
-### Variable Transformations
 
-<a name="data2"></a>
-#### 1. Footprints: 
+#### 4, 5, 17 Generic Centroid Join (walkscores, neighborhood fixed effects, sextants, school zones, zones) <a name="centroid_joins"></a>
+![Generic Centroid join](Images/centroid-join.png)
+
+Above, each dot is a taxlot centroid and the polygons are two neighborhoods we want to attach (add as a categorical variable) in the data frame comprised of taxlots. 
+
+Shown above are 2 neighborhood polygons, but the procedure is identical for quadrants, school catchment areas, and Complete Neighborhoods Scores.
+
+#### 6. Percent Vacant Properties within 200 ft
+
+Consider all taxlots in the sample regardless of the year in which they sold. We will use the variable `PRPCD_DESC` to identify parcels that are vacant. First identify all vacant parcels with
+```{R}
+vacancy_pruned <- taxlots %>%
+  dplyr::select(STATE_ID, PRPCD_DESC, Shape) %>%
+  group_by(STATE_ID) %>%
+  mutate(n = n()) %>%
+  filter(n == 1, !is.na(PRPCD_DESC)) # is.na() drops 1024 observations
+
+```
+
+Then create a dummy variable denoting whether a property is vacant.
+
+```{r}
+vacancy_pruned %<>% 
+  mutate(VACANT = case_when(PRPCD_DESC == "VACANT LAND" ~ 1,
+                            TRUE ~ 0))
+```
+
+Create a 200 ft buffer around each taxlot in the data frame `taxlots_pruned`.
+
+```{r}
+# set buffer dist
+conv <- 0.3048
+ft <- 200
+buffer_dist <- ft * conv
+
+# create buffer of size `buffer_dist` around each taxlot
+buffy <- taxlots_pruned %>%
+  rename(ShapeBuffy = Shape) %>%
+  st_buffer(buffer_dist)
+```
+
+Inner join the `vacancy_pruned` data frame and our taxlots sold in last 5 years, `buffy`. From here, we can group by the taxlots used in the analysis in `taxlots_pruned`, and calculate the ratio of non-vacant to vacant properties. Below is an image overlaying the taxlot buffer and surrounding taxlots colored by `PRPCD_DESC` categorical variable.
+
+The yellow rectangle is the only vacant property, giving us a percent vacant rate of $\frac{1}{12} \approx .0833 = 8.33%$.
+
+![Buffy figure](Images/buffy.png)
+
+And the code to calculate the ratio!
+
+```{r}
+vacant_join_buffy <- st_join(buffy, vacancy_pruned)
+
+# calculates percent vacant houses in buffer
+vacant_var <- vacant_join_buffy %>%
+  st_drop_geometry() %>%
+  dplyr::group_by(STATE_ID.x) %>% # grouping by taxlot_pruned taxlots
+  dplyr::summarize(percent_vacant = mean(vacant)) %>% # calculate percent
+  dplyr::rename(STATE_ID = STATE_ID.x) # rename to join back to full df
+```
+
+#### 8. Distance to Portland City Hall, a proxy for distance to Central Business District (CBD)
+
+This `dist_cityhall` variable measures the Euclidean distance in feet of each property to Portland city hall. We generated this variable using the `st_distance()` function within the `sf` R package. The code is reproduced below:
+
+```{r}
+# grab lat long from google maps
+cityhall <- data.frame(place = "City Hall",
+                       long = -122.679103,
+                       lat = 45.515000)
+# reformat from df to sf object
+cityhall <- st_as_sf(cityhall, coords = c("long", "lat"))
+
+# Set coordinate system
+cityhall <- cityhall %>%
+  st_set_crs(4326) %>%
+  st_transform(2913)
+
+taxlots %<>% 
+  mutate(dist_cityhall = st_distance(cityhall, 
+                                     taxlots,
+                                     which = "Euclidean"))
+                                     
+```  
+
+#### 9. Distance to nearest point of the UGB: <a name="ugb2"></a>
+
+This variable measures the Euclidean distance in feet of each property to the UGB. Generated using the `st_distance()` function within the `sf` and `sp` packages. This approach calculates distances using the centroids of MULTIPOLYGON taxlots. So, in the process, the st_geometry() attribute of the taxlot spatial data frame is changed from polygons to points. The geometry can be reset to MULTIPOLYGONS afterward. The code is reproduced below:
+
+```{r}
+# Transform UGB shapefile to correct coordinate system and as a multilinestring
+ugb %<>% 
+  st_transform(2913) %>% 
+  st_cast(., "MULTILINESTRING")
+
+# Convert to sp object since we use the rgeos::NearestPoints function that requires this
+# data type, using sp:as_Spatial()
+ugb.sp <- as_Spatial(ugb)
+
+# Pull taxlot polygons & calculate centroids
+centroids <- st_geometry(fugly)
+centroids.sp <- as_Spatial(centroids)
+
+# gNearestPoints returns vector of nearest point on taxlot (the centroid) 
+# and the nearest point on the ugb. We take the ugb point, the second item in the list.
+
+# Initialize empty list
+nearest_points <- list(NA, nrow(fugly))
+
+# call gNearestPoints over all observations in `taxlots` to return list of point geometries
+for(i in 1:nrow(fugly)){
+  nearest_points[i] <- st_as_sf(rgeos::gNearestPoints(centroids.sp[i,], ugb.sp)[2,])
+}
+
+# Combine/"unlist" the point geometries
+nearest_points <- do.call(c, nearest_points)
+
+# When given two vectors, st_distance(a, b) returns distance between all pairs of points in a and a.
+# ex. if a = c(1,2,3) b = c(0, 9, 8). then st_distance(a, b) = (1, 8, 7, 2, 7, 6, 3, 6, 5)
+# mapply() loops over nearest_points and centroids simultaneously so usign the above a, b, 
+# we end up with (1,7,5)
+fugly$dist_ugb <- mapply(FUN = st_distance, nearest_points, centroids)
+```
+
+Once we find the nearest point of the UGB for each taxlot centroid, we can then calculate the distance between these two points using `st_distance()` and iterate two at a time using `mapply()`.
+
+<INSERT PICTURE OF SAMPLE NEAREST POINT TO UGB>
+
+#### 10. Collapse Footprints: <a name="footprints"></a>
 We'll collapse and join footprints to the `taxlots_pruned` by their `STATE_ID` to get characteristics such as the number of buildings, number of units, and the maximum building height on a taxlot.
 
 ```{r}
@@ -200,8 +345,7 @@ ftprints_pruned %<>%
             n_buildings = n()) 
 ```
 
-<a name="impsegcop"></a>
-#### 2. Improvement segments (CoP):
+#### 11. Prune and reshape improvement segments (CoP): <a name="impsegcop"></a>
 These contain our garage, pool, shed, porch, deck, etc. square footage variables to possibly(?) be transformed into dummy variables. Currently they're in the full data set as square footages. The data frame was transformed as in the example below:
 
 | PropID | SegmentType | SegmentSqFt  |
@@ -225,8 +369,8 @@ impsegcop_wide <- dcast(setDT(isc_pruned), PropID ~ SegmentType,
               fill = 0,
               fun.aggregate = sum)
 ```
-<a name="impseg"></a>
-#### 3. Improvement segments (non-CoP):
+
+#### 12. Prune and reshape improvement segments (non-CoP): <a name="impseg"></a>
 
   - For each segment under property ID X, collapsed string variables `Plumbing_Code` and `Fire_Place_Code` from 
 
@@ -268,127 +412,22 @@ impseg <- left_join(impseg, baths, by = "PropertyID")
 impseg <- left_join(impseg, fires, by = "PropertyID") 
 
 ```
-#### 4. Distance to Portland City Hall, a proxy for distance to Central Business District (CBD)
+#### 13. Accessory Dwelling Unit Dummy
+Want an indicator variable denoting whether a property contains an ADU. We do not specify the number of ADUs on a taxlot. 
 
-This `dist_cityhall` variable measures the Euclidean distance in feet of each property to Portland city hall. We generated this variable using the `st_distance()` function within the `sf` R package. The code is reproduced below:
+Refer to the `gisimpcop` data frame.
 
-```{r}
-# grab lat long from google maps
-cityhall <- data.frame(place = "City Hall",
-                       long = -122.679103,
-                       lat = 45.515000)
-# reformat from df to sf object
-cityhall <- st_as_sf(cityhall, coords = c("long", "lat"))
-
-# Set coordinate system
-cityhall <- cityhall %>%
-  st_set_crs(4326) %>%
-  st_transform(2913)
-
-taxlots %<>% 
-  mutate(dist_cityhall = st_distance(cityhall, 
-                                     taxlots,
-                                     which = "Euclidean"))
-                                     
-```  
-<a name="ugb2"></a>
-#### 5. Distance to nearest point of the UGB
-
-This variable measures the Euclidean distance in feet of each property to the UGB. Generated using the `st_distance()` function within the `sf` and `sp` packages. This approach calculates distances using the centroids of MULTIPOLYGON taxlots. So, in the process, the st_geometry() attribute of the taxlot spatial data frame is changed from polygons to points. The geometry can be reset to MULTIPOLYGONS afterward. The code is reproduced below:
-
-```{r}
-# Transform UGB shapefile to correct coordinate system and as a multilinestring
-ugb %<>% 
-  st_transform(2913) %>% 
-  st_cast(., "MULTILINESTRING")
-
-# Convert to sp object since we use the rgeos::NearestPoints function that requires this
-# data type, using sp:as_Spatial()
-ugb.sp <- as_Spatial(ugb)
-
-# Pull taxlot polygons & calculate centroids
-centroids <- st_geometry(fugly)
-centroids.sp <- as_Spatial(centroids)
-
-# gNearestPoints returns vector of nearest point on taxlot (the centroid) 
-# and the nearest point on the ugb. We take the ugb point, the second item in the list.
-
-# Initialize empty list
-nearest_points <- list(NA, nrow(fugly))
-
-# call gNearestPoints over all observations in `taxlots` to return list of point geometries
-for(i in 1:nrow(fugly)){
-  nearest_points[i] <- st_as_sf(rgeos::gNearestPoints(centroids.sp[i,], ugb.sp)[2,])
-}
-
-# Combine/"unlist" the point geometries
-nearest_points <- do.call(c, nearest_points)
-
-# When given two vectors, st_distance(a, b) returns distance between all pairs of points in a and a.
-# ex. if a = c(1,2,3) b = c(0, 9, 8). then st_distance(a, b) = (1, 8, 7, 2, 7, 6, 3, 6, 5)
-# mapply() loops over nearest_points and centroids simultaneously so usign the above a, b, 
-# we end up with (1,7,5)
-fugly$dist_ugb <- mapply(FUN = st_distance, nearest_points, centroids)
-```
-
-#### 4. Centroid Joins (walkscores, neighborhood fixed effects, sextants, school zones, zones)
-![Generic Centroid join](Images/centroid-join.png)
-
-Above, each dot is a taxlot centroid and the polygons the layers we want to attach (add as a column) in the larger data frame. This procedure is identical for neighborhoods, quadrants, school catchment areas, and constraints.
-
-
-#### 6. Percent Vacant Properties within 200 ft
-
-Consider all taxlots in the sample regardless of the year in which they sold. We will use the variable `PRPCD_DESC` to identify parcels that are vacant. First identify all vacant parcels with
 ```{R}
-vacancy_pruned <- taxlots %>%
-  dplyr::select(STATE_ID, PRPCD_DESC, Shape) %>%
-  group_by(STATE_ID) %>%
-  mutate(n = n()) %>%
-  filter(n == 1, !is.na(PRPCD_DESC)) 
-
+# column (267352 obs) with unique PropID and ADU dummy
+ADU <- gisimpcop %>%
+  dplyr::select(ImpType, PropID) %>%
+  count(PropID) %>%
+  mutate(ADUdummy = ifelse(n == 1, "0", "1")) %>%
+  dplyr::select(PropID, ADUdummy) %>%
+  rename(PROPERTYID = PropID)
 ```
 
-Then create a dummy variable denoting whether a property is vacant.
-
-```{r}
-vacancy_pruned %<>% 
-  mutate(VACANT = case_when(PRPCD_DESC == "VACANT LAND" ~ 1,
-                            TRUE ~ 0))
-```
-
-Create a 200 ft buffer around each taxlot in the data frame `taxlots_pruned`.
-
-```{r}
-# set buffer dist
-conv <- 0.3048
-ft <- 200
-buffer_dist <- ft * conv
-
-# create buffer of size `buffer_dist` around each taxlot
-buffy <- taxlots_pruned %>%
-  rename(ShapeBuffy = Shape) %>%
-  st_buffer(buffer_dist)
-```
-
-Inner join the `vacancy_pruned` data frame and our taxlots sold in last 5 years, `buffy`. From here, we can group by the taxlots used in the analysis in `taxlots_pruned`, and calculate the ratio of non-vacant to vacant properties. Below is an image overlaying the taxlot buffer and surrounding taxlots colored by `PRPCD_DESC` categorical variable.
-
-![Buffy figure](Images/buffy.png)
-
-And the code to calculate the ratio!
-
-```{r}
-vacant_join_buffy <- st_join(buffy, vacancy_pruned)
-
-# calculates percent vacant houses in buffer
-vacant_var <- vacant_join_buffy %>%
-  st_drop_geometry() %>%
-  dplyr::group_by(STATE_ID.x) %>% # grouping by taxlot_pruned taxlots
-  dplyr::summarize(percent_vacant = mean(vacant)) %>% # calculate percent
-  dplyr::rename(STATE_ID = STATE_ID.x) # rename to join back to full df
-```
-
-### 14. Percent of Lot Covered by Canopy
+#### 14. Percent of Lot Covered by Canopy
 
 ```{r}
 # Collapse canopy by STATE_ID and generate canopy coverage ratios
@@ -408,7 +447,7 @@ canopy <- canopy %>%
                    taxlot_area = taxlot_area[1]) 
 ```
 
-### 15. Constraints
+#### 15. Constraints
 
 We will use a combination of the `bli_constraints` (not connected to `STATE_ID`) and `bli_constraints_v2` (connected to `STATE_ID`, but with centroid geometries of intersected taxlots and constraints) sf objects to generate the 27 constraint dummy variables. 
 
