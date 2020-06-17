@@ -1,4 +1,4 @@
-Last Edited: 6/15/20
+Last Edited: 6/17/20
 
 The RMD file big-clean produces the SFR and MFR data frames and generate-figures.rmd produces all tables and figures (aside from maps) used in the body of the thesis. 
 

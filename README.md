@@ -72,7 +72,7 @@ Each of these databases are saved in a directory called "DATA" on each of our ma
 - [impseg](#impseg) = "Improvement_Segments"
   - Description: data.frame object, interested in the `Plumbing_Code` and `Fire_Place_Code` variables that take values FB1, HB2, etc.
   - Dimensions: 1,567,227 x 57
-- [gisimpcop](#gisimpcop)
+- [gisimpcop](#gisimpcop) = "CoP_GISImprovement"
   - Description: data.frame object, contains information on ADUs, identified by `PropID` (ex. R148129) and `PropertyID` (ex. 104648)
   - Dimensions:  282,451 x 12
 - [school](#centroid_joins) = "school_attendance_areas"
@@ -248,7 +248,7 @@ buffy <- taxlots_pruned %>%
 
 Inner join the `vacancy_pruned` data frame and our taxlots sold in last 5 years, `buffy`. From here, we can group by the taxlots used in the analysis in `taxlots_pruned`, and calculate the ratio of non-vacant to vacant properties. Below is an image overlaying the taxlot buffer and surrounding taxlots colored by `PRPCD_DESC` categorical variable.
 
-The yellow rectangle is the only vacant property, giving us a percent vacant rate of $\frac{1}{12} \approx .0833 = 8.33%$.
+The yellow rectangle is the only vacant property, giving us a percent vacant rate of \frac{1}{12} \approx .0833 = 8.33%.
 
 ![Buffy figure](Images/buffy.png)
 

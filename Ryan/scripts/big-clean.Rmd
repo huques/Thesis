@@ -174,7 +174,7 @@ Moving from sfr.dat to sfr.dat.cleaned, we drop 1,085 observations. Note that th
 • totalsqft_flg: 485
 • n_units_flg: 485
 • n_buildings_flg: 485
-• pct_canopy_cov_flg: 235 ** (these missing observations can be coded as 0)
+• pct_canopy_cov_flg: 235 ** (these missing observations should be coded as 0)
 • h_baths_flg: 219
 • f_baths_flg: 216
 • YEARBUILT_flg: 49 
