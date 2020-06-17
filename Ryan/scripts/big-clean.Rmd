@@ -40,16 +40,17 @@ df %<>%
   mutate(n_fireplaces = ifelse(is.na(n_fireplaces), 0, n_fireplaces), 
          saledate = as.Date(saledate),
          lnprice = log(SALEPRICE),
-         maxheight = ifelse(maxheight < 0, NA, maxheight),
+         maxheight = ifelse(maxheight < 0, NA, maxheight),  
          # define flags
-         proud_flag =  grepl("PROUD", OWNER1) | 
+         proud_flag =  grepl("PROUD", OWNER1) |             # 25 flagged
            grepl("PROUD", OWNER2) | grepl("PROUD", OWNER3),
-         trust_flag = grepl("TRUST", OWNER1) | 
+         trust_flag = grepl("TRUST", OWNER1) |              # 116 flagged
            grepl("TRUST", OWNER2) | grepl("TRUST", OWNER3), 
-         top_1 =  SALEPRICE > quantile(SALEPRICE, .99),
-         vacant_dummy = PRPCD_DESC == "VACANT LAND",
+         top_1 =  SALEPRICE > quantile(SALEPRICE, .99),     # 347 flagged
+         vacant_dummy = PRPCD_DESC == "VACANT LAND",        # 1307 flagged
          price_diff = SALEPRICE - LANDVAL3, 
-         price_ratio = SALEPRICE/LANDVAL3 * 100,         
+         price_ratio = SALEPRICE/LANDVAL3 * 100,            # 144 obs are missing LANDVAL3,
+                                                            # 1808 obs < 100% price ratio
          #make percentages
          pct_canopy_cov = 100*pct_canopy_cov,
          percent_vacant = 100*percent_vacant) %>%
@@ -80,6 +81,7 @@ constraint_sums <- trim %>%
   dplyr::select(constraints) %>%
   rowSums()
 
+# making a dummy for whether a property is constrained
 trim %<>%
   mutate(is_constrained = constraint_sums > 0)
 
@@ -120,7 +122,7 @@ trim %<>%
 • `sfr.dat.cleaned`: 22,433
 
 ## Missingness
-Moving from sfr.dat to sfr.dat.cleaned, we drop 2,282 observations.
+Moving from sfr.dat to sfr.dat.cleaned, we drop 2,282 observations due to missingness.
 
 • maxheight_flg: 1,885
 • totalsqft_flg: 464
@@ -172,7 +174,7 @@ Moving from sfr.dat to sfr.dat.cleaned, we drop 1,085 observations. Note that th
 • totalsqft_flg: 485
 • n_units_flg: 485
 • n_buildings_flg: 485
-• pct_canopy_cov_flg: 235
+• pct_canopy_cov_flg: 235 ** (these missing observations can be coded as 0)
 • h_baths_flg: 219
 • f_baths_flg: 216
 • YEARBUILT_flg: 49 
