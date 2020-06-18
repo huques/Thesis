@@ -6,7 +6,7 @@ This is a little README for my file "Huque_SFR_script.R".
 
 Before running the script, please ensure that you have the file "thesis-data.csv" in the correct place. This script runs it using the `here` package and assumes that it is in a folder entitled `DATA`. 
 
-After running the script, there will be NINE data frames and ONE .htm file. The file is called `SFR_final.htm` and provides the results of the model in a format common in publications. It can be opened on a browser or as a word document. 
+After running the script, there will be NINE data frames in the environment and ONE .htm file. The file is called `SFR_final.htm` and provides the results of the model in a format common in publications. It can be opened on a browser or as a word document. 
 
 Below is a summary of the nine dataframes the script outputs. 
 

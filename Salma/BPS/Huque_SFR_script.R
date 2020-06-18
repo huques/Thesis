@@ -20,7 +20,7 @@ SFR_raw <- thesis_data %>%
 
 #-------------------------------------------------------------------------
 
-# Make a string of constraints and percent canopy names called "con_names"
+# Make a string of constraints names called "con_names"
 SFR_constraints_raw <- SFR_raw %>%
   dplyr::select(conECSI, conLUST, 
                 conHist, conHistLdm, conNatAm,

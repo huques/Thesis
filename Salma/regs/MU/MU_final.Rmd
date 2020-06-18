@@ -649,6 +649,7 @@ MUbase20_log.mod <- lm(MUbase20_log, MUdat20)
 summary(MUbase20_log.mod)
 
 
+
 ### Regression 7: Mega Sexy Final Model
 stargazer(
   MUbase20_log.mod, 
