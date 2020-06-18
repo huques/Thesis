@@ -44,7 +44,6 @@ library(tidyverse)
 ```{r}
 # GDB sent 10/29 via email
 gdb <- here::here("DATA", "data2.gdb")
-capacity <- st_read(gdb, layer = "bli_development_capacity")
 impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
 gisimpcop <- st_read(gdb, layer = "CoP_GISImprovement")
 impseg <- st_read(gdb, layer = "imp_segments")
@@ -106,8 +105,9 @@ walk <- st_read(walk_gdb,
 intersectionz <- st_read(here::here("DATA", "constraint_layers.gdb"),
                          "Intersectionz")
 
-# Source: done in GIS using FEMA map + footprints
-ftfld_ids <- st_read(here("DATA", "ft_fld.gdb"), 
+# Source: GDB created in GIS using FEMA map + building footprints: 
+# FEMA map - https://www.portlandmaps.com/arcgis/rest/services/Public/Hazard/MapServer/1
+ftfld_ids <- st_read(here("DATA", "ft_fld.gdb"),
                      layer = "ft_floodplain")
 
 # Source: https://gis-pdx.opendata.arcgis.com/datasets/portland-administrative-sextants
@@ -129,7 +129,7 @@ taxlots$saledate <- as.Date(as.character(taxlots$SALEDATE), "%m/%d/%Y")
 
 # Filter by time interval we're interested in (5-years)
 taxlots_pruned <- taxlots %>%
-  filter(saledate > begin & saledate < end)
+  filter(saledate >= begin & saledate <= end)
 
 # Grab keys to the lots we want for state and property ids
 stateids <- taxlots_pruned %>%
@@ -160,10 +160,10 @@ n_repeats <- function(data, id_var){
 # Transform crs from 4326 to 2913
 walk %<>% 
   st_transform(2913) %>%
-  dplyr::select(CN_score) 
+  dplyr::select(CN_score) # note that we're dropping all other variables that came with this df
 
 # join to dataframe
-fugly <- sf::st_join(st_centroid(taxlots_pruned), walk)
+fugly <- sf::st_join(st_centroid(taxlots_pruned), walk, left = T)
 paste0("walkscore Join: ", n_repeats(fugly, STATE_ID)) %>% print()
 ```
 
@@ -172,11 +172,12 @@ paste0("walkscore Join: ", n_repeats(fugly, STATE_ID)) %>% print()
 
 ```{r}
 nbhd %<>% 
-  dplyr::select(-c(OBJECTID, Shape_Leng, Shape_Length, Shape_Area))
+  dplyr::select(NAME)
 
 # join to dataframe
-fugly <- st_join(st_centroid(fugly), nbhd)
+fugly <- st_join(st_centroid(fugly), nbhd, left = TRUE) # change to a left join
 print(paste0("nbhd Join: ",  n_repeats(fugly, STATE_ID)))
+dim(fugly)
 ```
 
 
@@ -187,16 +188,19 @@ print(paste0("nbhd Join: ",  n_repeats(fugly, STATE_ID)))
 taxlots$STATE_ID <- fct_explicit_na(taxlots$STATE_ID)
 
 # df of unique obs -- 197,131 obs
+# note that most of the repeat observations in taxlots have missing data for vacant land
+# (there are 1024 missing), so we'll remove them
 vacancy_pruned <- taxlots %>%
   dplyr::select(STATE_ID, PRPCD_DESC, Shape) %>%
   group_by(STATE_ID) %>%
   mutate(n = n()) %>%
-  filter(n == 1) 
+  filter(n == 1, !is.na(PRPCD_DESC)) 
 
 # create vacant column
-vacancy_pruned %<>% 
-  mutate(VACANT = case_when(PRPCD_DESC == "VACANT LAND" ~ 1,
-                            TRUE ~ 0))
+vacancy_pruned$VACANT <- vacancy_pruned$PRPCD_DESC == "VACANT LAND"
+# vacancy_pruned %<>% 
+#   mutate(VACANT = case_when(PRPCD_DESC == "VACANT LAND" ~ 1,
+#                             TRUE ~ 0))
 
 # creates a buffer called buffer_dist
 # 1 ft = 0.3048 meters
@@ -210,17 +214,14 @@ buffy <- taxlots_pruned %>%
   st_buffer(buffer_dist)
 
 # join buffy and vacancy_pruned columns 
-vacant_join_buffy <- st_join(buffy, vacancy_pruned, left = TRUE)
+vacant_join_buffy <- st_join(buffy, vacancy_pruned)
 
 # calculates percent vacant houses in buffer
 # taking out na's when calcing percent vacant
 vacant_var <- vacant_join_buffy %>%
   st_drop_geometry() %>%
   dplyr::group_by(STATE_ID.x) %>%
-  dplyr::mutate(n = n(),
-         VACANT = VACANT*1) %>%
-  dplyr::filter(!is.na(VACANT)) %>% 
-  dplyr::summarize(percent_vacant = sum(VACANT)/n[1]) %>%
+  dplyr::summarise(percent_vacant = mean(VACANT)) %>%
   dplyr::rename(STATE_ID = STATE_ID.x)
 
 # join to dataframe 
@@ -232,16 +233,12 @@ rm(vacant_var, vacant_join_buffy, buffy, vacancy_pruned)
 
 ### 7. Schools
 
-One problem with an st_intersection is some lots are divided by the school catchment area boundaries, resulting in non-unique STATE_IDs. The st_intersection adds a second observation if it a tax lot is partially within catchment area 1 and partially within catchment area 2.
-
-This is the reason the number of observations rose after the intersection. 
-
 ```{r}
 school %<>% 
   dplyr::select(-c(Shape_Leng, Shape_Length, Shape_Area))
 
 # join to dataframe
-fugly <- st_join(st_centroid(fugly), school)
+fugly <- st_join(st_centroid(fugly), school, left = TRUE)
 print(paste0("school Join: ",  n_repeats(fugly, STATE_ID)))
 rm(school)
 ```
@@ -259,7 +256,6 @@ cityhall <- data.frame(place = "City Hall",
   st_transform(2913)
   
   
-# HERE IS THE ERROR
 fugly$dist_cityhall <- st_distance(cityhall, fugly, 
                                    which = "Euclidean")[1,]
 rm(cityhall)
@@ -279,7 +275,6 @@ ugb %<>%
 # Convert to sp object since we use the rgeos::NearestPoints function that requires this
 # data type
 ugb.sp <- as_Spatial(ugb)
-
 
 # Pull taxlot polygons & calculate centroids
 centroids <- st_geometry(fugly)
@@ -329,12 +324,12 @@ ftprints_pruned %<>%
   st_drop_geometry() %>%
   dplyr::group_by(STATE_ID) %>%
   dplyr::summarise(totalsqft = sum(BLDG_SQFT, na.rm = T),
-            yearbuilt = mean(YEAR_BUILT, na.rm = T),
+            #yearbuilt = mean(YEAR_BUILT, na.rm = T),
             maxheight = max(AVG_HEIGHT, na.rm = T),
-            avgheight = mean(AVG_HEIGHT, na.rm = T),
-            surfelev = mean(SURF_ELEV, na.rm = T),
-            minheight = mean(MIN_HEIGHT, na.rm = T),
-            volume = mean(VOLUME, na.rm = T),
+            #avgheight = mean(AVG_HEIGHT, na.rm = T),
+            #surfelev = mean(SURF_ELEV, na.rm = T),
+            #minheight = mean(MIN_HEIGHT, na.rm = T),
+            #volume = mean(VOLUME, na.rm = T),
             n_units = sum(UNITS_RES, na.rm = T),
             n_buildings = n()) 
 
@@ -407,8 +402,7 @@ fugly$h_baths <- NA
 extractBaths <- function(string){
   if(is.na(string)){c(fb = NA, hb = NA)}
   else{
-    str <- strsplit(string, "[[:punct:]]")[[1]]
-    str <- sort(str)
+    str <- strsplit(string, "[[:punct:]]")[[1]] %>% sort()
     fb <- str[grepl("FB", str)]
     hb <- str[grepl("HB", str)]
     nfb <- sum(as.numeric(gsub("FB", "", fb)))
@@ -550,7 +544,7 @@ rm(firstjoin, dumdum_constraints, non_id_constraints)
 ```
 
 
-### 16. conFld100 - Building Footprint
+### 16. 100-Year Floodplain Building Footprint Method
 
 ```{r}
 ftfld_ids %<>%
@@ -570,7 +564,7 @@ sex %<>%
   st_transform(2913)
 
 # join to dataframe
-fugly <- st_join(st_centroid(fugly), sex) %>%
+fugly <- st_join(st_centroid(fugly), sex, left = TRUE) %>%
   dplyr::select(PREFIX, STATE_ID) %>%
   st_drop_geometry() %>%
   dplyr::left_join(fugly, by = "STATE_ID") %>%
@@ -645,10 +639,10 @@ for(i in 1:length(zonelist)){
 }
 
 # creates a data frame with all dataframes joined using st_join
-df <- st_join(st_centroid(taxlots_pruned), zoningfeb2018)
+df <- st_join(st_centroid(taxlots_pruned), zoningfeb2018, left = TRUE)
 
 for(i in 1:(length(zonelist)-1)){
-  df <- st_join(df, zonelist[[i]])
+  df <- st_join(df, zonelist[[i]], left = TRUE)
 }
 
 # Create new df with just the shorthand zoning variables across time
