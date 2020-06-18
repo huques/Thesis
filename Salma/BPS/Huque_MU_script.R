@@ -65,18 +65,18 @@ MUtest1 <- MU_raw %>%
 #set NAs as zero, add in improvements, mutate filtering parameters
 
 #garage sqft
-MUgar_sqft_sum <- test1 %>%
+MUgar_sqft_sum <- MUtest1 %>%
   dplyr::select(matches("gar"), matches("car")) %>%
   rowSums()
 
 # basement sqft
-MUbsmt_sqft_sum <- test1 %>%
+MUbsmt_sqft_sum <- MUtest1 %>%
   dplyr::select(matches("bsmt")) %>%
   dplyr::select(-c("BSMT PARKING","BSMT GAR")) %>%
   rowSums()
 
 # creating zone change dummy
-MUzone_test <- test1 %>%
+MUzone_test <- MUtest1 %>%
   dplyr::select(matches("zone"), -c(ZONE_DESC_aug2016, ZONE_DESC_aug2018, ZONE_DESC_feb2018, `Zone Description`, sale_zone)) %>%
   mutate_all(str_replace, pattern = "R", replacement = "") %>%
   mutate_all(funs(as.numeric)) %>%
@@ -160,17 +160,16 @@ MUtest1 %<>%
 # Clean MU dataframe: 
 # remove based on filtering parameters
 MUtest2 <- MUtest1 %>%
-  filter(totalsqft != 0, # 30 obs
-         age_sold >= 0, # 20 obs
-         vacant_dummy == FALSE, # 
-         SALEPRICE > 30000, #
-         yearbuilt > 1500,
-         arms_length20 == TRUE,
-         BLDGVAL3 > 50000, #
-         f_baths > 0 | h_baths > 0,
-         totalsqft > 600,
-         arms_length20 == TRUE)                                         #687 obs
- 
+  filter(totalsqft != 0,                    #1,544 obs -- 497 cases, 497 removed
+         age_sold >= 0,                     #1,417 obs -- 616 cases, 127 removed   
+         vacant_dummy == FALSE,             #1403 obs -- 137 cases, 14 removed  
+         SALEPRICE > 30000,                 #1361 obs -- 60 cases, 42 removed   
+         yearbuilt > 1500,                  #1361 obs -- 596 cases, 0 removed   
+         arms_length20 == TRUE,             #1357 obs -- 67 cases, 4 removed    
+         BLDGVAL3 > 50000,                  #1325 obs -- 371 cases, 32 removed    
+         f_baths > 0 | h_baths > 0,         #694 obs -- 1,164 cases, 631 removed   
+         totalsqft > 600)                   #687 obs -- 515 cases, 7 removed                        
+
 
 #-------------------------------------------------------------------------
 
@@ -219,16 +218,78 @@ MU_final.mod <- lm(MU_final, MU_dat)
 
 # Create dataframe with Coefficient Percent Effect 
 # remember semi-log transformation means you can't directly interpret coefficient!
+MU_final.coef <- data.frame(variable = names(MU_final.mod[["model"]]),
+                            coef = MU_final.mod[["coefficients"]]) %>%
+  filter(is.na(coef) == FALSE) %>%
+  mutate(percenteffect = (exp(coef) - 1)*100)
 
-
-# Create dataframe with Constraints Counts
- 
+# Create table with Constraints Counts
+MU_constraints_table <- MU_dat %>%
+  dplyr::select(conECSI, conLUST, 
+                conHist, conHistLdm, conNatAm,
+                conCovrly, conPovrly,
+                conAirHgt, conHeliprt, conNoise,
+                conGW,
+                conLSHA, conSLIDO, conFld100, conSlp25, 
+                conSewer, conStorm, conWater,
+                conWetland,
+                conInstit, conPrvCom, conPubOwn,
+                conView,
+                conTranCap, conTranInt, conTranSub) %>%
+  pivot_longer(cols = starts_with("con"),
+               names_to = "Constraint",
+               values_to = "Value") %>%
+  group_by(Constraint, Value) %>%
+  summarize(Count = n()) %>%
+  pivot_wider(names_from = Value,
+              values_from = Count) %>%
+  rename(Yes = `1`,
+         No = `0`) %>%
+  mutate(Percent_Yes = (Yes/No)*100)
 
 # Create dataframe with Controls Counts
+MU_controls_dat <- MU_dat %>%
+  # Select and rename
+  dplyr::select(
+    `Assessed Land Value (2017)` = LANDVAL3,
+    `Assessed Building Value (2017)` = BLDGVAL3,
+    `Total Assessed Value (2017)` = TOTALVAL3,
+    
+    `Sale Price` = SALEPRICE,
+    `Log Sale Price` = SALEPRICElog,
+    `Age When Sold` = age_sold,
+    `Building Footprint (sqft)` = totalsqft,
+    `Building Footprint Squared (sqft)` = totalsqft_sqd,
+    `Taxlot Area (sqft)` = taxlot_area,
+    `Taxlot Area Squared (sqft)` = taxlot_area_sqd,
+    `Building Volume` = volume,
+    `Number of Floors` = FLOORS,
+    `Maximum Building Height (ft)` = maxheight,
+    
+    `Full Baths` = f_baths,
+    `Half Baths` = h_baths,
+    
+    `Vacant Properties in 200ft Radius (%)` = percent_vacant,
+    `Vacant Dummy` = vacant_dummy,
+    `Canopy Cover (% of lot)` = pct_canopy_cov,
+    `Canopy Cover Dummy` = canopy_dum,
+    `Complete Neighborhoods Score (0-100)` = CN_score,
+    `Distance to Central Business District (ft)` = dist_cityhall,
+    `Distance to Urban Growth Boundary (ft)` = dist_ugb)
 
-
-
-# note that I removed missing observations and Neighborhood Fixed Effects
+# Create table with Controls Counts
+# note that I removed missing observations 
+MU_controls_table <-  MU_controls_dat %>%
+  pivot_longer(everything(),
+               names_to = "Constraint_Names",
+               values_to = "Values") %>%
+  group_by(Constraint_Names) %>%
+  summarize(mean = mean(Values, na.rm = TRUE),
+            median = median(Values, na.rm = TRUE),
+            stdev = sd(Values, na.rm = TRUE),
+            min = min(Values, na.rm = TRUE),
+            max = max(Values, na.rm = TRUE),
+            num_na = sum(is.na(Values)))
 
 
 #========================================================================
@@ -239,11 +300,11 @@ MU_final.mod <- lm(MU_final, MU_dat)
 # Creates an html output of the model results called "MU_final" 
 # can be opened as a word doc
 stargazer(
-  MUbase20_log.mod, 
+  MU_final.mod, 
   type = "html",
   title = "Mixed-use Residential Results",
   style = "io",
-  out = "MUmodels_finalsapp.htm",
+  out = "MU_final.htm",
   column.labels = c("Log Sale Price <br> (standard error)"),
   covariate.labels = c(
     "Constant",
@@ -292,5 +353,5 @@ stargazer(
   header = FALSE)
 
 # remove extraneous datasets
-rm()
+rm(MUtest1, MUtest2)
 

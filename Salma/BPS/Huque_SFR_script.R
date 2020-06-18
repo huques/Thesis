@@ -138,17 +138,17 @@ test1 %<>%
 # remove based on filtering parameters
 test2 <- test1 %>%
   dplyr::select(-c(matches("zone"))) %>% #25,266 
-  filter(between(totalsqft, 1, 7500),           #24,717 -- 549 cases      #24,717 -- 549 removed  
-         yearbuilt > 1500,                      #24,152 -- 1,114 cases    #24,107 -- 610 removed  
-         f_baths < 6,                           #24,861 -- 405 cases      #24,072 -- 35 removed  
-         BLDGSQFT != 0,                         #25,217 -- 49 cases       #24,064 -- 8 removed  
-         age_sold > 0,                          #24,053 -- 1,213 cases    #23,970 -- 94 removed 
-         top_1 == FALSE,                        #25,013 -- 253 cases      #23,761 -- 209 removed 
-         arms_length == TRUE,                   #24,748 -- 518 cases      #23,299 -- 462 removed  
-         proud_flag == FALSE,                   #25,251 -- 15 cases       #23,299 -- 0 removed  
-         llc_flag == FALSE,                     #24,853 -- 413 cases      #23,001 -- 298 removed  
-         trust_flag == FALSE,                   #25,214 -- 52 cases       #22,960 -- 41 removed 
-         vacant_dummy == FALSE)                   
+  filter(between(totalsqft, 1, 7500),           #24,717 -- 549 cases, 549 removed  
+         yearbuilt > 1500,                     #24,107 -- 1,114 cases,610 removed  
+         f_baths < 6,                           #24,072 -- 405 cases, 35 removed  
+         BLDGSQFT != 0,                         #24,064 -- 49 cases, 8 removed  
+         age_sold > 0,                          #23,970 -- 1,213 cases, 94 removed 
+         top_1 == FALSE,                        #23,761 -- 253 cases, 209 removed 
+         arms_length == TRUE,                   #23,299 -- 518 cases, 462 removed  
+         proud_flag == FALSE,                   #23,299 -- 15 cases, 0 removed  
+         llc_flag == FALSE,                     #23,001 -- 413 cases, 298 removed  
+         trust_flag == FALSE,                   #22,960 -- 52 cases, 41 removed 
+         vacant_dummy == FALSE)                 #0 cases
 
 # total removed: 2,306 or 9.13% of raw sfr dataset
 
