@@ -3,7 +3,6 @@ library(tidyverse)
 library(magrittr)
 library(here)
 library(data.table)
-library(MASS)
 library(knitr)
 library(stargazer)
 library(lubridate)
@@ -292,7 +291,7 @@ stargazer(
   type = "html",
   title = "Single-Family Residential Results",
   style = "io",
-  out = "SFR_final.htm",
+  out = "Salma/BPS/Huque_SFR_final.htm",
   column.labels = c("Log Sale Price <br> (standard error)", "Marginal Price (%)"),
   covariate.labels = c(
     "Constant",
@@ -352,6 +351,10 @@ stargazer(
   header = FALSE)
 
 # remove extraneous datasets
-rm(test1, test2)
+rm(test1, test2, SFR_controls_dat, SFR_constraints_raw)
+   
+# remove extraneous values and functions
+rm(clean_names, con_names, SFR_final,
+   attic_sqft_sum, bsmt_sqft_sum, deck_sqft_sum, gar_sqft_sum, zone_test, to0)
 
 

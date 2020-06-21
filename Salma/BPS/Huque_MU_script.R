@@ -3,7 +3,6 @@ library(tidyverse)
 library(magrittr)
 library(here)
 library(data.table)
-library(MASS)
 library(knitr)
 library(stargazer)
 library(lubridate)
@@ -304,12 +303,12 @@ stargazer(
   type = "html",
   title = "Mixed-use Residential Results",
   style = "io",
-  out = "MU_final.htm",
+  out = "Salma/BPS/Huque_MU_final.htm",
   column.labels = c("Log Sale Price <br> (standard error)"),
   covariate.labels = c(
     "Constant",
     "Age When Sold", "Building Footprint Squared (sqft)", "Taxlot Area Squared (sqft)",
-    "Number of Floors", "Maximum Building Height (ft)", "Buildnig Use Dummy", 
+    "Number of Floors", "Maximum Building Height (ft)", "Building Use Dummy", 
     "Full Baths", "Half Baths", "Vacant Properties in 200ft Radius (%)",
     "Zoning Dummy 1", "Zoning Dummy 2", "Zoning Dummy 3",
     "Complete Neighborhoods Score (0-100)",
@@ -353,5 +352,9 @@ stargazer(
   header = FALSE)
 
 # remove extraneous datasets
-rm(MUtest1, MUtest2)
+rm(MUtest1, MUtest2, MU_controls_dat, MU_constraints_raw)
+
+# remove extraneous values and functions
+rm(clean_names, con_names, MU_final,
+   MUbsmt_sqft_sum, MUgar_sqft_sum, MUzone_test, to0)
 
