@@ -139,7 +139,7 @@ test1 %<>%
 test2 <- test1 %>%
   dplyr::select(-c(matches("zone"))) %>% #25,266 
   filter(between(totalsqft, 1, 7500),           #24,717 -- 549 cases, 549 removed  
-         yearbuilt > 1500,                     #24,107 -- 1,114 cases,610 removed  
+         yearbuilt > 1500,                      #24,107 -- 1,114 cases, 610 removed  
          f_baths < 6,                           #24,072 -- 405 cases, 35 removed  
          BLDGSQFT != 0,                         #24,064 -- 49 cases, 8 removed  
          age_sold > 0,                          #23,970 -- 1,213 cases, 94 removed 
@@ -152,8 +152,6 @@ test2 <- test1 %>%
 
 # total removed: 2,306 or 9.13% of raw sfr dataset
 
-mary <- test1 %>%
-  filter(between(totalsqft, 1, 7500))
 #-------------------------------------------------------------------------
 
 # Select final relevant variables

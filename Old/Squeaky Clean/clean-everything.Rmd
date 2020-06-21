@@ -1,0 +1,169 @@
+---
+title: "Cleaning everything"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# CLEANING EVERYTHING
+```{r}
+library(tidyverse)
+library(readxl)
+df <- read_csv("./DATA/thesis-data.csv")
+```
+
+Note that the isVacant variable from the capacity data frame is equal to 1 when partially or fully vacant, so a value of 1 makes sense, however may not be super useful for our purposes (it'd be better to have 0/1 partially or not vacant v. fully vacant).
+
+May want to check out some of these properties on a map to understand what is vacant is capturing & whether or not we want to keep it in the analysis.
+```{r}
+summary(df$percent_vacant)
+summary(df$SALEPRICE)
+table(df$prop_type)
+
+df %>% 
+  select(contains("con")) %>%
+  select(-contains("CONCRETE|SECOND|only|pct")) %>%
+  colSums(na.rm = T)
+```
+
+
+
+From the table above, we have 27,200 SFR, 4,792 MFR, and 2,008 mixed use properties.
+
+# Which transactions are arms-length?
+```{r}
+assvalue <- df %>% select(STATE_ID, SITEADDR, MKTVALYR1, 
+                          LANDVAL1, MKTVALYR2, LANDVAL2, 
+                          MKTVALYR3, LANDVAL3, SALEPRICE, 
+                          saledate, everything()) %>%
+  mutate(diff = SALEPRICE - LANDVAL3, 
+         ratio = SALEPRICE/LANDVAL3 * 100)
+
+assvalue %>%
+  filter(ratio < 20) %>%
+  select(SALEPRICE, ratio, diff, everything()) %>%
+  arrange(ratio)
+
+asstrim <- assvalue %>%
+  filter(ratio > 20 & PRPCD_DESC != "VACANT LAND")
+
+ggplot(data = assvalue, aes(ratio)) + 
+  geom_histogram() +
+  xlim(0, 150)
+
+ggplot(data = assvalue, aes(ratio)) + 
+  geom_density() +
+  xlim(0, 150)
+
+dim(assvalue %>% filter(SALEPRICE == 0))
+
+# SAMPLE LOT THAT HAS TINY RATIO
+df %>% filter(STATE_ID == "1S1E17CA  2200")
+
+df %>% filter(grepl("LEVY", SITEADDR))
+# could use the variable PRPCD_DESC to help us remove some of the outliers
+# note that htis is zoned within SFR, weird i guess it's just undeveloped.  
+```
+
+There are 516 properties in our sample that sold for $0. Also what does levy code 001 mean? Should we remove these? It appears from Portlandmaps.com that these are lots that do not have buildings. 
+
+Also note that the `PRPCD_DESC` variable says "VACANT LAND" so we may be able to filter out the vacant parcels by filtering based upon this. If the `isVacant` variable is not as helpful (from  the capacity layer), we could even reconstruct that variable to utilize `PRPCD_DESC` instead. 
+
+```{r}
+vaca <- asstrim %>% filter(grepl("VACANT", PRPCD_DESC)) %>%
+  select(PRPCD_DESC, STATE_ID, SALEPRICE, prop_type)
+
+unique(vaca$PRPCD_DESC)
+```
+
+According to the above table, there are 1289 properties coded as "VACANT LAND" or "IMPROVED LAND AS VACANT".    
+
+### Distribution of sale price
+
+```{R}
+saleprice_plot <- ggplot(data = asstrim, aes(SALEPRICE)) + 
+  geom_histogram() + 
+  xlim(0, 1200000)
+
+saleprice_plot
+saleprice_density <- ggplot(data = asstrim, aes(SALEPRICE)) + 
+  geom_density() + 
+  xlim(0, 1200000)
+saleprice_density
+
+summary(asstrim$SALEPRICE)
+  
+```
+
+
+# Filling NA constraints with zero
+
+```{R}
+asstrim %>%
+  select(starts_with("con")) %>%
+  colSums(na.rm = T)
+
+setZero <- function(x){ifelse(is.na(x), 0, x)}
+
+const_names <- colnames(asstrim)[grepl("con", colnames(asstrim))][1:27]
+
+asstrim %<>%
+  mutate_at(const_names, setZero)
+  
+```
+
+
+### Explore the IS_VACANT variable
+
+According to the BLI model, this variable includes both partially and fully vacant lots. The `capacity.full` dataframe has only 34,298 observations (before it is pruned to the taxlots in our analysis). Let's check out the proportion of these that are flagged vacant.
+
+19159/34298 properties are flagged as `vacant.` 
+
+4634 are flagged as surrounded by 100% partially or fully vacant lots.
+
+```{r}
+dim(capacity.full)
+capacity.full %>% filter(IS_VACANT == "True") %>% dim()
+
+capacity.full %>%
+  filter(IS_VACANT == "True" & BLDFT_SQFT > 0) %>%
+  select(IS_VACANT, STATE_ID, UNDEV_SQFT, BLDFT_SQFT, ABLD_SQFT) %>%
+  slice(980:1000) %>%
+  mapview()
+  
+full_vac <- asstrim %>%
+  filter(percent_vacant == 1)
+
+taxlots_pruned %>%
+  filter(STATE_ID == "1S2E08CD  23300") %>%
+  mapview()
+```
+
+
+### Find and remove land trusts
+
+There are 116 observations where we have "TRUST" in either OWNER1, 2 or 3. 
+```{r}
+sus.trusts <- assvalue %>%
+  filter(grepl("TRUST", OWNER1) | grepl("TRUST", OWNER2) | grepl("TRUST", OWNER3)) %>%
+  select(OWNER1, SALEPRICE, LANDVAL3, STATE_ID) %>% 
+  pull(SALEPRICE)
+
+asstrim %<>%
+  mutate(proud =  grepl("PROUD", OWNER1) | grepl("PROUD", OWNER2) | grepl("PROUD", OWNER3))
+
+asstrim %>%
+  filter(trust == T) %>%
+  select(OWNER1, SALEPRICE, SITEADDR) 
+summary(sus.trusts)
+asstrim  %>%
+ # mutate(quant = quantile(SALEPRICE, .90)) +
+  ggplot(aes(SALEPRICE, fill = trust)) + geom_density() + 
+  xlim(0, 2000000)a
+
+```
+
+
+

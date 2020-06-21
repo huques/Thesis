@@ -1,0 +1,325 @@
+---
+title: "Scratchwork"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#PACKAGES
+```{r}
+library(lubridate)
+library(sf)
+library(dplyr)
+library(reshape2)
+```
+
+#READING IN DATA
+```{r}
+gdb <- "/Users/salmahuque/Desktop/BigThesis/Reed/data.gdb"
+layers <- st_layers(gdb)
+layers
+layers[["name"]]
+gdb2 <- "/Users/salmahuque/Desktop/BigThesis/Reed/data2.gdb"
+layers2 <- st_layers(gdb2)
+layers2
+layers2[["name"]]
+
+
+capacity <- st_read(gdb, layer = "bli_development_capacity")
+gisimpcop <- st_read(gdb, layer = "CoP_GISImprovement")
+impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
+gispropcop <- st_read(gdb, layer = "CoP_GISProperty")
+allpropcop <- st_read(gdb, layer = "CoP_AllProperties")
+segchar <- st_read(gdb, layer = "Seg_Char")
+rollhist <- st_read(gdb, layer = "roll_history")
+#rollwide <- st_read(gdb, layer = "roll_histoy_wide")
+#rollvals <- st_read(gdb, layer = "roll_values")
+impseg <- st_read(gdb, layer = "imp_segments")
+salescop <- st_read(gdb, layer = "CoP_OrionSalesHistory")
+school <- st_read(gdb, layer = "school_attendance_areas")
+imp <- st_read(gdb, layer = "improvements")
+```
+
+
+```{r}
+firelu <- st_read(gdb, layer = "Fireplace_Lookup")
+segmentlu <- st_read(gdb, layer = "Segment_Type_Lookup")
+imptypelu <- st_read(gdb, layer = "Imp_Type_Lookup")
+impcodeslu <- st_read(gdb, layer = "Improvement_Codes_Lookup") 
+propcodelu <- st_read(gdb, layer = "Property_Code_Lookup") 
+plumblu <- st_read(gdb, layer = "Plumbing_Lookup")
+
+taxlots <- st_read(gdb2, layer = "taxlots_20191010") 
+bli_constraints <- st_read(gdb2, layer = "bli_constraints_all")
+footprints <- st_read(gdb2, layer = "building_footprints_20191010")
+```
+COLUMN NAMES
+
+```{r}
+#Ryan's code (edited)
+
+datanames <- c("constraints", "gisimpcop", "impsegcop", "gispropcop", "allpropcop", "segchar", "rollhist", "impseg", "salescop","school", "imp", "taxlots", "bliconstraints", "footprints") #missing rollwide
+datanames 
+
+#pget variable names in PRINT form
+for(i in datanames){
+  col <- colnames(get(i))
+  print(i)
+  print(col)
+}
+
+#function to get all of our variable names in LIST form
+composed <- function(name){
+  colnames(get(name))
+}
+allvars <- lapply(datanames, composed)
+names(allvars) <- datanames
+allvars
+
+#finds first(?) column name containing the phrase "ID" (broken)
+id_list <- list(c(), length(datanames)) #empty list
+for(i in 1:length(allvars)){
+  id_list[i] <- allvars[[i]][grepl("ID", allvars[[i]])] 
+}
+
+```
+
+
+
+LOOKING AT INDIVIDUAL HOUSES
+```{r}
+#carlton and yellow house ID's
+bigid <- c("R122577", "R290070")
+littleid <- c("79992", "241919")
+stid <- "1S2E17CD  19900"
+rno <- c("R110500190", "R842406870")
+
+#pulling observations from files based on ID
+  filter(constraints, RNO == rno)
+  filter(allpropcop, PropertyID == littleid)
+  filter(gisimpcop, PropID == bigid)
+  filter(gispropcop, PropID == bigid)
+  filter(impsegcop, PropID == bigid)
+  filter(salescop, PropID == bigid)
+  filter(impseg, PropertyID == bigid)
+  filter(imp, PropertyID == bigid)
+  filter(rollhist, PropertyID == bigid)
+  # filter(rollwide, PropertyID == bigid)
+  # filter(rollvals, PropertyID == bigid)
+  filter(segchar, PropertyID == bigid)
+
+#binding carlton and yellow observations: unsuccessful attempt
+test <- bind_cols(
+  bli_obs <- filter(constraints, RNO %in% rno),
+  allprop_obs <- filter(allpropcop, PropertyID %in% littleid),
+  gisimp_obs <- filter(gisimpcop, PropID %in% bigid),
+  gisprop_obs <- filter(gispropcop, PropID %in% bigid),
+  impsegcop_obs <- filter(impsegcop, PropID %in% bigid),
+  saleshist_obs <- filter(salescop, PropID %in% bigid),
+  impseg_obs <- filter(impseg, PropertyID %in% bigid),
+  imp_obs <- filter(improvements, PropertyID %in% bigid),
+  rollhist_obs <- filter(rollhist, PropertyID %in% bigid),
+  rollwide_obs <- filter(rollwide, PropertyID %in% bigid),
+  rollvals_obs <- filter(rollvals, PropertyID %in% bigid),
+  segchar_obs <- filter(segchar, PropertyID %in% bigid)
+  )
+
+#Binding tables using good data
+test <- bind_cols(
+  allprop_obs <- filter(allpropcop, PropertyID %in% littleid),
+  gisimp_obs <- filter(gisimpcop, PropID %in% bigid),
+  gisprop_obs <- filter(gispropcop, PropID %in% bigid),
+  imp_obs <- filter(imp, PropertyID %in% bigid)
+  # rollwide_obs <- filter(rollwide, PropertyID %in% bigid)
+  )
+
+#leftover: need to reshape
+  bli_obs == 0 #because contraints not available
+  impseg_obs == 9
+  copimpseg_obs == 9
+  saleshist_obs == 7
+  rollhist_obs == 44
+  # rollvals_obs == 44
+  segchar_obs == 0
+  
+#reshaping obs
+impsegcop_reshape <- dcast(impsegcop_obs, PropID + TaxYear ~ SegmentType, value.var = "SegmentSqFt") 
+segchar_reshape <- dcast(segchar_obs, PropertyID ~ Segment_Num)
+
+segchar_melt <- melt(segchar, id= c("PropertyID", "Segment_Num"))
+segchar_question <- dcast(segchar_melt, PropertyID ~ variable)
+segchar_melt2 <- melt(segchar, id= "Segment_Num")
+
+impseg_reshape <- dcast(impseg_obs, PropertyID ~ Seg_Type) 
+rollhist_reshape <- dcast(rollhist_obs, PropertyID ~ year)
+rollvals_reshape <- dcast(rollvals_obs, PropertyID ~ year)
+
+```
+
+
+#IMPSEG FORMATTING LONG TO WIDE
+
+```{r}
+#Ryan's code
+
+names <- colnames(impseg)
+drop <- c("Segment_Num","Structure_Num","Seg_Type", "SegID", "PropertyID") #no need to be replicated
+keep <- names[!names %in% drop] #things being replicated
+
+library(data.table)
+subimpseg <- impseg[1:100,] #only ran first 100 for speed
+
+impseg_wide <- dcast(setDT(impseg), PropertyID ~ Segment_Num, value.var=c(keep))
+
+```
+
+# IMPSEGCOP FORMATTING LONG TO WIDE
+
+```{r}
+names <- colnames(impsegcop)
+drop <- c("SegmentNbr","TaxYear","PropID", "PropertyID", "SegmentType", "ImprovementNbr") #no need to be replicated
+keep <- names[!names %in% drop] #things being replicated
+
+library(data.table)
+subimpsegcop <- impsegcop[1:100,]
+
+impsegcop_wide <- dcast(setDT(subimpsegcop), PropID ~ SegmentType, value.var = "SegmentSqFt") 
+```
+
+
+# SALESHIST FORMATTING LONG TO WIDE
+
+```{r}
+names <- colnames(salescop)
+drop <- c("PropertyID", "PropID") #no need to be replicated
+keep <- names[!names %in% drop] #things being replicated
+
+library(data.table)
+subsalescop <- salescop[1:100,]
+
+salescop_wide <- dcast(setDT(subsalescop), PropID ~l ) 
+```
+
+# ROLLHIST FORMATTING LONG TO WIDE
+
+```{r}
+names <- colnames(rollhist)
+drop <- c("PropertyID", "Roll_Num", "Roll_Date", "year") #no need to be replicated
+keep <- names[!names %in% drop] #things being replicated
+
+library(data.table)
+subrollhist <- rollhist[1:100,]
+
+rollhist_wide <- dcast(setDT(rollhist), PropertyID ~ year, value.var = c(keep)) 
+
+library(reshape2)
+data1 <- melt(rollhist, id.vars = c("PropertyID", "year"))
+dcast(data1, PropertyID ~ year)
+```
+
+```{r}
+
+#making a function to bind together obs
+selectanobs <- function(letter_id, number_id, state_id, rno) {
+  (filter(constraints, RNO == rno)
+  filter(allpropcop, PropertyID == number_id)
+  filter(gisimpcop, PropID == letter_id)
+  filter(gisimpcop, PropID == letter_id)
+  filter(impsegcop, PropID == letter_id)
+  filter(salescop, PropID == letter_id)
+  filter(impseg, PropertyID == letter_id)
+  filter(improvements, PropertyID == letter_id)
+  filter(rollhist, PropertyID == letter_id)
+  filter(rollwide, PropertyID == letter_id)
+  filter(rollvals, PropertyID == letter_id)
+  filter(segchar, PropertyID == letter_id)}
+
+  
+
+```
+
+
+# JOINING IMPSEG_WIDE AND TAXLOTS
+
+```{r}
+
+join1 <- full_join(taxlots, impseg_wide, by = c("PROPERTYID" = "PropertyID"))
+
+```
+
+# LITERAL SCRATCHWORK
+
+```{r}
+[1]   "TaxYear"       "PropID"        "AltAcctNum"   
+ [5] "MapTaxLot"          "Legal"         "TractLot"     
+ [9]       "LocationCode"  "LocationName" 
+[13] "MortgageCode"  "AccountStatus" "LevyCodeArea"      
+[17] "PropertyType"  "PropertyFlags" "SerialNumber"  "XplateNumber" 
+[21] "MaindPropID"   "ImpCount"      "IndusSiteNum"  "PropClass"    
+[25] "PropCode"      "LandCount"         
+[29] "Inspection"        "InstrumentNum"     
+[33] "SalePrice"     "SaleDate"      "Exemptions"    "LandRMV"      
+[37] "LandAgMkt"     "ImpRMV"        "TotalRMV"      "MAV"          
+[41]   "MSAV"          "SAV"    
+
+[1] "PropertyID"    "TaxYear"       "PropID"        "AltAcctNum"   
+ [5] "MapTaxLot"     "MapID"         "Legal"         "TractLot"     
+ [9] "Block"         "AddlLegalCode" "LocationCode"  "LocationName" 
+[13] "MortgageCode"  "AccountStatus" "LevyCodeArea"  "NbhdCode"     
+[17] "PropertyType"  "PropertyFlags" "SerialNumber"  "XplateNumber" 
+[21] "MaindPropID"   "ImpCount"      "IndusSiteNum"  "PropClass"    
+[25] "PropCode"      "LandCount"     "LastApprDate"  "Appraiser"    
+[29] "Inspection"    "DeedType"      "InstrumentNum" "DeedDate"     
+[33] "SalePrice"     "SaleDate"      "Exemptions"    "LandRMV"      
+[37] "LandAgMkt"     "ImpRMV"        "TotalRMV"      "MAV"          
+[41] "M50Assessed"   "MSAV"          "SAV"    
+
+
+
+
+
+
+
+
+$taxlots
+ [1] "AREA"       "RNO"            
+ [5]        
+ [9]            
+[13]        
+[17]  "PRPCD_DESC"      
+[21]       "UNITS"       
+[25] "MKTVALYR1"     "BLDGVAL1"        
+[29] "MKTVALYR2"     "BLDGVAL2"     
+[33] "MKTVALYR3"     "BLDGVAL3"      
+[37]   "A_T_SQFT"    
+[41] "A_T_ACRES"    "FRONTAGE"       "SOURCE"      
+[45]   "TLID"         "Shape_Length" "Shape_Area"  
+[49] "Shape"       
+
+
+$taxlots
+ [1] "AREA"         "STATE_ID"     "RNO"          "OWNER1"      
+ [5] "OWNER2"       "OWNER3"       "OWNERADDR"    "OWNERCITY"   
+ [9] "OWNERSTATE"   "OWNERZIP"     "SITEADDR"     "SITECITY"    
+[13] "SITE_STATE"   "SITEZIP"      "LEGAL_DESC"   "TAXCODE"     
+[17] "PROP_CODE"    "PRPCD_DESC"   "LANDUSE"      "YEARBUILT"   
+[21] "BLDGSQFT"     "BEDROOMS"     "FLOORS"       "UNITS"       
+[25] "MKTVALYR1"    "LANDVAL1"     "BLDGVAL1"     "TOTALVAL1"   
+[29] "MKTVALYR2"    "LANDVAL2"     "BLDGVAL2"     "TOTALVAL2"   
+[33] "MKTVALYR3"    "LANDVAL3"     "BLDGVAL3"     "TOTALVAL3"   
+[37] "SALEDATE"     "SALEPRICE"    "ACC_STATUS"   "A_T_SQFT"    
+[41] "A_T_ACRES"    "FRONTAGE"     "COUNTY"       "SOURCE"      
+[45] "PROPERTYID"   "TLID"         "Shape_Length" "Shape_Area"  
+[49] "Shape"       
+
+```
+
+
+```{r}
+
+
+```
+
