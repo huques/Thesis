@@ -102,7 +102,7 @@ walk <- st_read(walk_gdb,
            layer = "Complete_Neighborhoods_Scoring_Surface")
 
 # GDB sent 2/13 via email 
-intersectionz <- st_read(here::here("DATA", "constraint_layers.gdb"),
+intersections <- st_read(here::here("DATA", "constraint_layers.gdb"),
                          "Intersectionz")
 
 # Source: GDB created in GIS using FEMA map + building footprints: 
@@ -111,7 +111,7 @@ ftfld_ids <- st_read(here("DATA", "ft_fld.gdb"),
                      layer = "ft_floodplain")
 
 # Source: https://gis-pdx.opendata.arcgis.com/datasets/portland-administrative-sextants
-sex <- here("DATA", "Portland_Administrative_Sextants",
+quads <- here("DATA", "Portland_Administrative_Sextants",
             "Portland_Administrative_Sextants.shp") %>% 
   sf::st_read()
 
@@ -163,8 +163,8 @@ walk %<>%
   dplyr::select(CN_score) # note that we're dropping all other variables that came with this df
 
 # join to dataframe
-fugly <- sf::st_join(st_centroid(taxlots_pruned), walk, left = T)
-paste0("walkscore Join: ", n_repeats(fugly, STATE_ID)) %>% print()
+df <- sf::st_join(st_centroid(taxlots_pruned), walk, left = T)
+paste0("walkscore Join: ", n_repeats(df, STATE_ID)) %>% print()
 ```
 
 
@@ -175,9 +175,9 @@ nbhd %<>%
   dplyr::select(NAME)
 
 # join to dataframe
-fugly <- st_join(st_centroid(fugly), nbhd, left = TRUE) # change to a left join
-print(paste0("nbhd Join: ",  n_repeats(fugly, STATE_ID)))
-dim(fugly)
+df <- st_join(st_centroid(df), nbhd, left = TRUE) # change to a left join
+print(paste0("nbhd Join: ",  n_repeats(df, STATE_ID)))
+dim(df)
 ```
 
 
@@ -225,9 +225,11 @@ vacant_var <- vacant_join_buffy %>%
   dplyr::rename(STATE_ID = STATE_ID.x)
 
 # join to dataframe 
-fugly <- left_join(fugly, vacant_var, by = "STATE_ID")
-print(paste0("vacant Join: ",  n_repeats(fugly, STATE_ID)))
+df <- left_join(df, vacant_var, by = "STATE_ID")
+print(paste0("vacant Join: ",  n_repeats(df, STATE_ID)))
 rm(vacant_var, vacant_join_buffy, buffy, vacancy_pruned)
+dim(df)
+
 ```
 
 
@@ -238,9 +240,11 @@ school %<>%
   dplyr::select(-c(Shape_Leng, Shape_Length, Shape_Area))
 
 # join to dataframe
-fugly <- st_join(st_centroid(fugly), school, left = TRUE)
-print(paste0("school Join: ",  n_repeats(fugly, STATE_ID)))
+df <- st_join(st_centroid(df), school, left = TRUE)
+print(paste0("school Join: ",  n_repeats(df, STATE_ID)))
 rm(school)
+dim(df)
+
 ```
 
 
@@ -256,9 +260,11 @@ cityhall <- data.frame(place = "City Hall",
   st_transform(2913)
   
   
-fugly$dist_cityhall <- st_distance(cityhall, fugly, 
+df$dist_cityhall <- st_distance(cityhall, df, 
                                    which = "Euclidean")[1,]
 rm(cityhall)
+dim(df)
+
 ```
 
 
@@ -277,17 +283,17 @@ ugb %<>%
 ugb.sp <- as_Spatial(ugb)
 
 # Pull taxlot polygons & calculate centroids
-centroids <- st_geometry(fugly)
+centroids <- st_geometry(df)
 centroids.sp <- as_Spatial(centroids)
 
 # gNearestPoints returns vector of nearest point on taxlot (the centroid) 
 # and the nearest point on the ugb. We take the ugb point, the second item in the list.
 
 # Initialize empty list
-nearest_points <- list(NA, nrow(fugly))
+nearest_points <- list(NA, nrow(df))
 
 # call gNearestPoints over all observations in `taxlots` to return list of point geometries
-for(i in 1:nrow(fugly)){
+for(i in 1:nrow(df)){
   nearest_points[i] <- st_as_sf(rgeos::gNearestPoints(centroids.sp[i,], ugb.sp)[2,])
 }
 
@@ -298,8 +304,10 @@ nearest_points <- do.call(c, nearest_points)
 # ex. if a = c(1,2,3) b = c(0, 9, 8). then st_distance(a, b) = (1, 8, 7, 2, 7, 6, 3, 6, 5)
 # mapply() loops over nearest_points and centroids simultaneously so usign the above a, b, 
 # we end up with (1,7,5)
-fugly$dist_ugb <- mapply(FUN = st_distance, nearest_points, centroids)
+df$dist_ugb <- mapply(FUN = st_distance, nearest_points, centroids)
 rm(nearest_points, ugb.sp, ugb, centroids.sp, centroids)
+
+dim(df)
 
 ```
 
@@ -334,10 +342,12 @@ ftprints_pruned %<>%
             n_buildings = n()) 
 
 # Join to dataframe
-fugly <- left_join(fugly, ftprints_pruned, 
+df <- left_join(df, ftprints_pruned, 
                by = "STATE_ID")
-print(paste0("feet Join: ",  n_repeats(fugly, STATE_ID)))
+print(paste0("feet Join: ",  n_repeats(df, STATE_ID)))
 rm(ftprints_pruned)
+dim(df)
+
 ```
 
 
@@ -360,10 +370,12 @@ impsegcop_wide <- dcast(setDT(impsegcop_wide), PropID ~ SegmentType,
 
 
 # Join to dataframe
-fugly <- left_join(fugly, impsegcop_wide, 
+df <- left_join(df, impsegcop_wide, 
                by = "PROPERTYID")
-print(paste0("fugly impsegcop Join: ",n_repeats(fugly, STATE_ID)))
+print(paste0("df impsegcop Join: ",n_repeats(df, STATE_ID)))
 rm(impsegcop_wide)
+dim(df)
+
 ```
 
 
@@ -388,16 +400,19 @@ bath <- is_pruned %>%
   dplyr::ungroup()
 
 # join to dataframe
-fugly <- left_join(fugly, bath, by = "PROPERTYID")
-print(paste0("fugly bath Join: ",  n_repeats(fugly, STATE_ID)))
+df <- left_join(df, bath, by = "PROPERTYID")
 
 
+#---- dimension + unique identifier checks ----
+print(paste0("df bath Join: ",  n_repeats(df, STATE_ID)))
+dim(df)
+#----------------------------------------------
 
 #-----------------
 # Recode bathrooms 
 # Initialize columns: f.baths = total full baths, h.baths = total half baths
-fugly$f_baths <- NA
-fugly$h_baths <- NA
+df$f_baths <- NA
+df$h_baths <- NA
 
 extractBaths <- function(string){
   if(is.na(string)){c(fb = NA, hb = NA)}
@@ -412,9 +427,9 @@ extractBaths <- function(string){
 }
 
 # Create 2 x 34480 matrix of number of bathrooms
-bath_matrix <- sapply(fugly$bath, extractBaths)
-fugly$f_baths <- bath_matrix[1,]
-fugly$h_baths <- bath_matrix[2,]
+bath_matrix <- sapply(df$bath, extractBaths)
+df$f_baths <- bath_matrix[1,]
+df$h_baths <- bath_matrix[2,]
 
 rm(bath_matrix)
 
@@ -432,8 +447,12 @@ fire <- is_pruned %>%
                                       collapse = "|")) %>%
   dplyr::rename(PROPERTYID = PropertyID)
 
-fugly <- left_join(fugly, fire, by = "PROPERTYID") 
-print(paste0("Fugly fire Join: ",  n_repeats(fugly, STATE_ID)))
+df <- left_join(df, fire, by = "PROPERTYID") 
+
+#---- dimension + unique identifier checks ----
+print(paste0("df fire Join: ",  n_repeats(df, STATE_ID)))
+dim(df)
+#----------------------------------------------
 
 #------------------
 # Recode fireplaces
@@ -452,7 +471,7 @@ extractHearth <- function(string){
   }
 }
 
-fugly$n_fireplaces <- sapply(fugly$fireplace, extractHearth)
+df$n_fireplaces <- sapply(df$fireplace, extractHearth)
 ```
 
 
@@ -472,8 +491,8 @@ ADU <- gisimpcop %>%
 ADU <- ADU[-c(1),]
 
 # join to dataframe 
-fugly <- left_join(fugly, ADU, by = "PROPERTYID")
-print(paste0("ADU Join: ",  n_repeats(fugly, STATE_ID)))
+df <- left_join(df, ADU, by = "PROPERTYID")
+print(paste0("ADU Join: ",  n_repeats(df, STATE_ID)))
 rm(ADU)
 ```
 
@@ -482,7 +501,7 @@ rm(ADU)
 
 ```{r}
 # create new data frame in order to calculate total taxlot area
-taxlot_areas <- fugly %>%
+taxlot_areas <- df %>%
   rename(taxlot_area = Shape_Area) %>%
   dplyr::select(STATE_ID, taxlot_area) %>% 
   st_drop_geometry()
@@ -505,8 +524,12 @@ canopy <- canopy %>%
                    # should end up with 33387 observations
 
 # join to dataframe
-fugly <- left_join(fugly, canopy, by = "STATE_ID")
-print(paste0("Canopy Join: ", n_repeats(fugly, STATE_ID)))
+df <- left_join(df, canopy, by = "STATE_ID")
+
+#---- dimension + unique identifier checks ----
+print(paste0("Canopy Join: ", n_repeats(df, STATE_ID)))
+dim(df)
+#----------------------------------------------
 rm(canopy)
 ```
 
@@ -538,8 +561,12 @@ dumdum_constraints <- firstjoin %>%
   st_drop_geometry() 
 
 # join to dataframe
-fugly <- left_join(fugly, dumdum_constraints, by = "STATE_ID")
-print(paste0("constraints Join: ", n_repeats(fugly, STATE_ID)))
+df <- left_join(df, dumdum_constraints, by = "STATE_ID")
+
+#---- dimension + unique identifier checks ----
+print(paste0("constraints Join: ", n_repeats(df, STATE_ID)))
+dim(df)
+#----------------------------------------------
 rm(firstjoin, dumdum_constraints, non_id_constraints)
 ```
 
@@ -552,7 +579,7 @@ ftfld_ids %<>%
   pull(STATE_ID)
 
 # join to dataframe
-fugly %<>%
+df %<>%
   mutate(conFld100_ft = ifelse(STATE_ID %in% ftfld_ids, 1, 0))
 ```
 
@@ -560,14 +587,14 @@ fugly %<>%
 ## 17. Spatial Quadrants
 
 ```{r}
-sex %<>%
+quads %<>%
   st_transform(2913)
 
 # join to dataframe
-fugly <- st_join(st_centroid(fugly), sex, left = TRUE) %>%
+df <- st_join(st_centroid(df), quads, left = TRUE) %>%
   dplyr::select(PREFIX, STATE_ID) %>%
   st_drop_geometry() %>%
-  dplyr::left_join(fugly, by = "STATE_ID") %>%
+  dplyr::left_join(df, by = "STATE_ID") %>%
   rename(sextant = PREFIX)
 ```
 
@@ -575,7 +602,7 @@ fugly <- st_join(st_centroid(fugly), sex, left = TRUE) %>%
 ### 18. Partial Constraints
 
 ```{r}
-partial <- intersectionz %>%
+partial <- intersections %>%
   dplyr::filter(STATE_ID %in% stateids) %>%
   dplyr::group_by(STATE_ID) %>%
   dplyr::mutate(pct_conFld100 = ifelse(conFld100 == "True", 
@@ -589,7 +616,7 @@ partial <- intersectionz %>%
          pct_conCovrly = ifelse(conCovrly == "True", 
                              sum(Shape_Area, na.rm = T) / AREA[1], 0))
 
-partial <- partial %>%
+partial %<>%
   st_drop_geometry() %>%
   dplyr::group_by(STATE_ID) %>%
   dplyr::summarise(pct_conFld100 = pct_conFld100[1],
@@ -607,14 +634,19 @@ partial <- partial %>%
 partial[is.na(partial)] <- 0
 
 # join to dataframe
-fugly <- left_join(fugly, partial, by = "STATE_ID")
+df <- left_join(df, partial, by = "STATE_ID")
 rm(partial)
+
+#---- dimension + unique identifier checks ----
+print(paste0("partial constraints Join: ", n_repeats(df, STATE_ID)))
+dim(df)
+#----------------------------------------------
 ```
 
 
 ### 19. Zoning Changes 
 
-based on zoning code changes effective 5/24/20
+Based on zoning code from 5/24/20
 
 ```{r}
 # create list and name items in the list
@@ -638,15 +670,15 @@ for(i in 1:length(zonelist)){
   zonelist[[i]] <- dat
 }
 
-# creates a data frame with all dataframes joined using st_join
-df <- st_join(st_centroid(taxlots_pruned), zoningfeb2018, left = TRUE)
+# creates a data frame with all dataframes joined
+zone_df <- st_join(st_centroid(taxlots_pruned), zoningfeb2018, left = TRUE)
 
 for(i in 1:(length(zonelist)-1)){
-  df <- st_join(df, zonelist[[i]], left = TRUE)
+  zone_df <- st_join(zone_df, zonelist[[i]], left = TRUE)
 }
 
-# Create new df with just the shorthand zoning variables across time
-zones_over_time <- df %>%
+# Create new df with only the shorthand zoning variables across time
+zones_over_time <- zone_df %>%
   dplyr::select(contains("ZONE_"), STATE_ID, saledate) %>%
   dplyr::select(-contains("TMP", "CLASS")) %>%
   #select(-contains("DESC"))
@@ -666,7 +698,7 @@ zones_over_time %<>%
                                    as.character(ZONE_aug2018), 
                                    sale_zone))
 
-# Join use crosswalk to generate prop_type variable: MFR, SFR, mixed use
+# Join crosswalk to generate property type categorical variable: MFR, SFR, mixed use
 zones_over_time %<>%
   dplyr::left_join(crosswalk, by = "sale_zone") %>%
   st_drop_geometry() %>%
@@ -682,17 +714,17 @@ zones_over_time %<>%
   dplyr::select(-saledate)
 
 # join to dataframe
-fugly <- left_join(fugly, zones_over_time, by = "STATE_ID")
-print(paste0("zone Join: ", n_repeats(fugly, STATE_ID)))
+df <- left_join(df, zones_over_time, by = "STATE_ID")
+print(paste0("zone Join: ", n_repeats(df, STATE_ID)))
 ```
 
 
 ## 20. Export Full Data Frame
 
-Creates a csv called `thesis-data.csv` that lives in the DATA folder. 
+Export csv called `thesis-data.csv` to the DATA folder. 
 
 ```{R}
-fugly %>%
+df %>%
   select(-c(SHARED, Shape)) %>%
   write.csv(., here("DATA", "thesis-data.csv"))
 ```
