@@ -8,10 +8,11 @@
 # AIC, BIC, df, etc, are different flavors that get at training error, which tells us how well
 # the model performs on the given data. Training MSE necessarily decreases with the number
 # of variables used to fit the model, but at some point extra, uninformative variables
-# are harmful and the model performs worse (there is increased variance). 
+# worsen the model's performance by increasing variance. Therefore we want to measure how
+# well the model predicts house prices of observations that were not used to fit it, or
+# test MSE.
 
-# To approximate test MSE, which is a measure of how well the model predicts house prices 
-# of observations that were not used to fit it, I use 5-fold cross validation. This shuffles the data,
+# To approximate test MSE, I use 5-fold cross validation (CV). CV shuffles the data,
 # splits it into 5 groups. Then for each group, use the 4 other groups
 # to fit the model (ie. to generate coefficients/best fit parameters), 
 # then use the remaining group (test set) to evaluate the MSE. 

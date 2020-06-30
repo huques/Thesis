@@ -106,12 +106,12 @@ intersections <- st_read(here::here("DATA", "constraint_layers.gdb"),
                          "Intersectionz")
 
 # Source: GDB created in GIS using FEMA map + building footprints: 
-# FEMA map - https://www.portlandmaps.com/arcgis/rest/services/Public/Hazard/MapServer/1
+# FEMA map - http://gis-pdx.opendata.arcgis.com/datasets/fema-flood-hazard-areas
 ftfld_ids <- st_read(here("DATA", "ft_fld.gdb"),
                      layer = "ft_floodplain")
 
 # Source: https://gis-pdx.opendata.arcgis.com/datasets/portland-administrative-sextants
-quads <- here("DATA", "Portland_Administrative_Sextants",
+sextants <- here("DATA", "Portland_Administrative_Sextants",
             "Portland_Administrative_Sextants.shp") %>% 
   sf::st_read()
 
@@ -587,11 +587,11 @@ df %<>%
 ## 17. Spatial Quadrants
 
 ```{r}
-quads %<>%
+sextants %<>%
   st_transform(2913)
 
 # join to dataframe
-df <- st_join(st_centroid(df), quads, left = TRUE) %>%
+df <- st_join(st_centroid(df), sextants, left = TRUE) %>%
   dplyr::select(PREFIX, STATE_ID) %>%
   st_drop_geometry() %>%
   dplyr::left_join(df, by = "STATE_ID") %>%

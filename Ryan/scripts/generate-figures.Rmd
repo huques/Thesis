@@ -229,13 +229,11 @@ my_reg_table  <- function(models = ..., title = "", omit, column.labels,
 # Tables
 **Workflow**:
 
-1) The function `stargazer()` from package of the same name takes an input data.frame produced by my function `summaryTable()` and outputs the data frame in a nicely formatted html table. 
+1) The function `stargazer()` from package of the same name takes an input data.frame produced by my function `summaryTable()` and outputs the data frame in a nicely formatted html table. It has the added benefit of outputting to html, which works easily with word.
 
-2) The tables are opened in a web browser (Chrome) and copied into the thesis Word document.
+2) The tables saved as .htm can be opened in a web browser or word, located in the GH directory: Thesis/Ryan/figs/tables 
 
-The tables produced below are saved in the github directory: Thesis/Ryan/figs/tables/html-tables. I use stargazer for ease of transferring into Word.
-
-## Constraint counts table (table 6)
+## Constraint counts table (table 6 in thesis document)
 ```{r}
 mfr.counts <- mfr.dat %>% select(matches("con")) %>%
   colSums()
@@ -294,9 +292,9 @@ stargazer(type = 'html',
 ```
 
 ## VIF tables (not included)
-Note that these tables don't appear in the body of the thesis document, but were used to diagnose multicollinearity problems and discussed in my Results and Model Diagnostics sections.
+VIFs don't appear in the body of the thesis but were used to diagnose multicollinearity discussed in Results and Model Diagnostics.
 
-They are saved with the rest of the tables in the folder html-tables.
+Located in Ryan/figs/tables/vif
 ```{R}
 # single 
 car::vif(mfr_mods[[6]]) %>% as.data.frame() %>% rownames_to_column() %>%
@@ -352,7 +350,9 @@ car::vif(sfr_mods[[6]]) %>% as.data.frame() %>% rownames_to_column() %>%
 
 4) Repeat 1-2 for MFR, in list of model objects, `mfr_mods`. End up with 7 SFR models and 6 MFR models.
 
-5) Use function `my_reg_table()`, my variant of `stargazer()` with specific formatting options selected (i.e. star/significance levels, heading labels, etc) to avoid copy pasting long sections of code. Export 3 html tables for each property type: coefficients of control variables, constraint variables, and full regression results.
+5) Use function `my_reg_table()`, variant of `stargazer()` with specific formatting options selected (i.e. star/significance levels, heading labels) to avoid copy pasting long sections of code. Export 3 html tables for each property type: coefficients of control variables, constraint variables, and full regression results.
+
+Located in Ryan/figs/tables/regressions
 
 
 ### SFR (tables 7, 8, B.1)
@@ -508,6 +508,8 @@ ggsave(here("Ryan", "figs", "plots", "mfr-bldg-imp.png"))
 
 # MAPS
 Not used. Tried to get a basemap but then ditched it. Kept here because the code could be useful once I figure out how to use the Google API. 
+
+For code used to generate maps, see script map-autocorrelation.R.
 
 ```{R}
 # devtools::install_github("dkahle/ggmap")
