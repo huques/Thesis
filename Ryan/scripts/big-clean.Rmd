@@ -136,13 +136,13 @@ sfr_vars <- c("dist_cityhall", "dist_ugb", "h_baths",
 
 sfr.dat <- trim %>%
   filter(prop_type == "Single-family") %>%
-  mutate(empty_lot_flag = BLDGSQFT == 0, is.na(totalsqft),
-         maybe_mfr_flag = UNITS > 5 | f_baths > 10,
-         big_sqft_flag = BLDGSQFT > 10000,
-         big_bsmt_flag = bsmt_sqft > 9000,
-         big_area_flag = AREA > 100000) %>%
+  mutate(empty_lot_flag = BLDGSQFT == 0, is.na(totalsqft),  # 127 flagged
+         maybe_mfr_flag = UNITS > 5 | f_baths > 10,         # 22 flagged
+         big_sqft_flag = BLDGSQFT > 10000,                  # 1 flagged
+         big_bsmt_flag = bsmt_sqft > 9000,                  # 6 flagged
+         big_area_flag = AREA > 100000) %>%                 # 43 flagged
     filter(!empty_lot_flag,
-         !maybe_mfr_flag, 
+         !maybe_mfr_flag,
          !big_area_flag,
          !big_sqft_flag,
          !big_bsmt_flag)
@@ -189,9 +189,20 @@ mfr_vars <- c("dist_cityhall", "dist_ugb", "h_baths",
 flags <- mfr.dat %>% select(pullVarname(mfr_vars)) %>% is.na()
 colnames(flags) <- paste(colnames(flags), "flg", sep = "_")
 
-mfr.dat <- trim %>%
+mfr.dat.new <- trim %>%
+  mutate(nonempty_lot = !(is.na(totalsqft) & BLDGSQFT == 0),    # 379 flagged
+         norm_taxlot_size = AREA < 100000,                      # 88 flagged
+         bldgsqft_imp = case_when(is.na(totalsqft) ~ BLDGSQFT,
+                                  BLDGSQFT == 0 ~ totalsqft,
+                                  TRUE ~ BLDGSQFT),
+          imputed = is.na(totalsqft)) %>%
   filter(prop_type == "Multi-family",
-         !(is.na(totalsqft) & BLDGSQFT == 0),
+        nonempty_lot, norm_taxlot_size,
+         bldgsqft_imp < 60000)
+
+mfr.dat.old <- trim %>%
+  filter(prop_type == "Multi-family",
+        !(is.na(totalsqft) & BLDGSQFT == 0),
          AREA < 100000) %>%
   mutate(bldgsqft_imp = case_when(is.na(totalsqft) ~ BLDGSQFT,
                                   BLDGSQFT == 0 ~ totalsqft,
