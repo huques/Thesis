@@ -42,6 +42,8 @@ library(tidyverse)
 
 ### 2. Set Pathnames and Load Databases
 ```{r}
+# Updated 8/02
+
 # GDB sent 10/29 via email
 gdb <- here::here("DATA", "data2.gdb")
 impsegcop <- st_read(gdb, layer = "CoP_OrionImprovementSegment")
@@ -115,6 +117,9 @@ sextants <- here("DATA", "Portland_Administrative_Sextants",
             "Portland_Administrative_Sextants.shp") %>% 
   sf::st_read()
 
+# Building square footage variable sent 7/23 via email 
+sqft <- read.csv(here("DATA", "thesis_data_ids_join_200723.csv")) %>%
+  select(STATE_ID, BLDGSQFT)
 
 ```
 
@@ -129,13 +134,16 @@ taxlots$saledate <- as.Date(as.character(taxlots$SALEDATE), "%m/%d/%Y")
 
 # Filter by time interval we're interested in (5-years)
 taxlots_pruned <- taxlots %>%
-  filter(saledate >= begin & saledate <= end)
+  filter(saledate >= begin & saledate <= end) %>%
+  select(-BLDGSQFT) %>%  # remove previous BLDGSQFT variable, add new one from 8/02
+  left_join(sqft, by = "STATE_ID") # join updated BLDGSQFT
 
 # Grab keys to the lots we want for state and property ids
 stateids <- taxlots_pruned %>%
   pull(STATE_ID)
 propids <- taxlots_pruned %>%
   pull(PROPERTYID)
+
 
 
 #-------------------------------------------------------------------------------
@@ -317,6 +325,9 @@ dim(df)
 Now we will try merging/collapsing footprints on this smaller subset of the entire data set, only homes that have sold in the last 5 years.
 
 ```{r, warning = FALSE}
+# Updated 8/02: remove(comment out the totalsqft variable from 
+# building footprint data frame)
+
 # grab only the footprints associated with stateids in our sample
 ftprints_pruned <- footprints %>%
   filter(STATE_ID %in% stateids) %>%
@@ -331,7 +342,8 @@ ftprints_pruned$YEAR_BUILT[ftprints_pruned$YEAR_BUILT == 0] <- NA
 ftprints_pruned %<>% 
   st_drop_geometry() %>%
   dplyr::group_by(STATE_ID) %>%
-  dplyr::summarise(totalsqft = sum(BLDG_SQFT, na.rm = T),
+  dplyr::summarise(
+    #totalsqft = sum(BLDG_SQFT, na.rm = T),  
             #yearbuilt = mean(YEAR_BUILT, na.rm = T),
             maxheight = max(AVG_HEIGHT, na.rm = T),
             #avgheight = mean(AVG_HEIGHT, na.rm = T),
